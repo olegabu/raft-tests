@@ -14,4 +14,4 @@ set(PACKAGE_LIBRARIES unofficial::braft::braft-static unofficial::brpc::brpc-sta
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(store_server server.cpp)
-target_link_libraries(store_server PRIVATE proto ${PACKAGE_LIBRARIES})
+target_link_libraries(store_server PRIVATE ${PACKAGE_LIBRARIES})

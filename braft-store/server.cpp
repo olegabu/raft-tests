@@ -30,17 +30,9 @@ class StoreStateMachine;
 // Implements Closure which encloses RPC stuff
 class DoneClosure : public braft::Closure {
 public:
-    DoneClosure(StoreStateMachine* store,
-                google::protobuf::Closure* done)
-        : _store(store)
-        , _done(done)
-    {}
+    DoneClosure() = default;
 
     void Run() override;
-
-private:
-    StoreStateMachine* _store;
-    google::protobuf::Closure* _done;
 };
 
 // Implementation of example::StoreStateMachine as a braft::StateMachine.
@@ -50,7 +42,6 @@ public:
         : _node(nullptr)
         , _leader_term(-1)
     {
-        CHECK_EQ(0, _value_map.init(FLAGS_map_capacity));
     }
 
     ~StoreStateMachine() override {
@@ -98,35 +89,26 @@ public:
         }
     }
 
-private:
-friend class DoneClosure;
-
-    void apply(google::protobuf::Closure* done) {
-        brpc::ClosureGuard done_guard(done);
+    void apply() {
         // Serialize request to the replicated write-ahead-log so that all the
         // peers in the group receive this request as well.
         // Notice that _value can't be modified in this routine otherwise it
         // will be inconsistent with others in this group.
-        
+
         // Serialize request to IOBuf
         const int64_t term = _leader_term.load(butil::memory_order_relaxed);
         if (term < 0) {
-            return redirect(response);
-        }
-        butil::IOBuf log;
-        log.push_back((uint8_t)type);
-        butil::IOBufAsZeroCopyOutputStream wrapper(&log);
-        if (!request->SerializeToZeroCopyStream(&wrapper)) {
-            LOG(ERROR) << "Fail to serialize request";
-            response->set_success(false);
+            LOG(INFO) << "Not leader";
             return;
         }
+        butil::IOBuf log;
+        log.append(std::string("0123456789012345678901234567890123456789012345678901234567890123")); // 64 bytes
+
         // Apply this log as a braft::Task
         braft::Task task;
         task.data = &log;
-        // This callback would be invoked when the task actually executed or
-        // fail
-        task.done = new DoneClosure(this, done_guard.release());
+        // This callback would be invoked when the task actually executed or failed
+        task.done = new DoneClosure();
         if (FLAGS_check_term) {
             // ABA problem can be avoided if expected_term is set
             task.expected_term = term;
@@ -134,6 +116,9 @@ friend class DoneClosure;
         // Now the task is applied to the group, waiting for the result.
         return _node->apply(task);
     }
+
+private:
+friend class DoneClosure;
 
     // @braft::StateMachine
     void on_apply(braft::Iterator& iter) override {
@@ -145,49 +130,21 @@ friend class DoneClosure;
             braft::AsyncClosureGuard done_guard(iter.done());
 
             // Parse data
-            butil::IOBuf data = iter.data();
-            // Fetch the type of operation from the leading byte.
-            uint8_t type = OP_UNKNOWN;
-            data.cutn(&type, sizeof(uint8_t));
+            const butil::IOBuf& data = iter.data();
+            auto dataSize = data.size();
 
-            DoneClosure* c = NULL;
+            DoneClosure* c = nullptr;
             if (iter.done()) {
                 c = dynamic_cast<DoneClosure*>(iter.done());
-            }
-
-            const google::protobuf::Message* request = c ? c->request() : NULL;
-            StoreResponse r;
-            StoreResponse* response = c ? c->response() : &r;
-            const char* op = NULL;
-            // Execute the operation according to type
-            switch (type) {
-            case OP_GET:
-                op = "get";
-                get_value(data, request, response);
-                break;
-            case OP_EXCHANGE:
-                op = "exchange";
-                exchange(data, request, response);
-                break;
-            case OP_CAS:
-                op = "cas";
-                cas(data, request, response);
-                break;
-            default:
-                CHECK(false) << "Unknown type=" << static_cast<int>(type);
-                break;
             }
 
             // The purpose of following logs is to help you understand the way
             // this StateMachine works.
             // Remove these logs in performance-sensitive servers.
             LOG_IF(INFO, FLAGS_log_applied_task) 
-                    << "Handled operation " << op 
-                    << " on id=" << response->id()
+                    << "Handled operation "
                     << " at log_index=" << iter.index()
-                    << " success=" << response->success()
-                    << " old_value=" << response->old_value()
-                    << " new_value=" << response->new_value();
+                    << " dataSize=" << dataSize;
         }
     }
 
@@ -227,120 +184,13 @@ friend class DoneClosure;
     }
 
     // end of @braft::StateMachine
-    
-    void get_value(const butil::IOBuf& data,
-                   const google::protobuf::Message* request,
-                   StoreResponse* response) {
-        int64_t id = 0;
-        if (request) {
-            // This task is applied by this node, get value from this
-            // closure to avoid additional parsing.
-            id = dynamic_cast<const GetRequest*>(request)->id();
-        } else {
-            butil::IOBufAsZeroCopyInputStream wrapper(data);
-            GetRequest req;
-            CHECK(req.ParseFromZeroCopyStream(&wrapper));
-            id = req.id();
-        }
-        int64_t* const v = _value_map.seek(id);
-        response->set_success(true);
-        response->set_id(id);
-        response->set_old_value(v ? *v : 0);
-        response->set_new_value(v ? *v : 0);
-    }
-
-    void exchange(const butil::IOBuf& data,
-                  const google::protobuf::Message* request,
-                  StoreResponse* response) {
-        int64_t id = 0;
-        int64_t value = 0;
-        if (request) {
-            // This task is applied by this node, get value from this
-            // closure to avoid additional parsing.
-            const ExchangeRequest* req
-                    = dynamic_cast<const ExchangeRequest*>(request);
-            id = req->id();
-            value = req->value();
-        } else {
-            butil::IOBufAsZeroCopyInputStream wrapper(data);
-            ExchangeRequest req;
-            CHECK(req.ParseFromZeroCopyStream(&wrapper));
-            id = req.id();
-            value = req.value();
-        }
-        int64_t& old_value = _value_map[id];
-        response->set_success(true);
-        response->set_id(id);
-        response->set_old_value(old_value);
-        response->set_new_value(value);
-        old_value = value;
-    }
-
-    void cas(const butil::IOBuf& data,
-                  const google::protobuf::Message* request,
-                  StoreResponse* response) {
-        int64_t id = 0;
-        int64_t value = 0;
-        int64_t expected = 0;
-        if (request) {
-            // This task is applied by this node, get value from this
-            // closure to avoid additional parsing.
-            const CompareExchangeRequest* req =
-                    dynamic_cast<const CompareExchangeRequest*>(request);
-            id = req->id();
-            value = req->new_value();
-            expected = req->expected_value();
-        } else {
-            butil::IOBufAsZeroCopyInputStream wrapper(data);
-            CompareExchangeRequest req;
-            CHECK(req.ParseFromZeroCopyStream(&wrapper));
-            id = req.id();
-            value = req.new_value();
-            expected = req.expected_value();
-        }
-        int64_t& old_value = _value_map[id];
-        response->set_old_value(old_value);
-        response->set_id(id);
-        if (old_value != expected) {
-            response->set_success(false);
-            response->set_new_value(old_value);
-        } else {
-            response->set_success(true);
-            response->set_new_value(value);
-            old_value = value;
-        }
-    }
-
-    static void* save_snapshot(void* arg) {
-        SnapshotClosure* sc = (SnapshotClosure*)arg;
-        std::unique_ptr<SnapshotClosure> sc_guard(sc);
-        brpc::ClosureGuard done_guard(sc->done);
-        std::string snapshot_path = sc->writer->get_path();
-        snapshot_path.append("/data");
-        std::ofstream os(snapshot_path.c_str());
-        for (size_t i = 0; i < sc->values.size(); ++i) {
-            os << sc->values[i].first << ' ' << sc->values[i].second << '\n';
-        }
-        CHECK_EQ(0, sc->writer->add_file("data"));
-        return NULL;
-    }
-
-    typedef butil::FlatMap<int64_t, int64_t> ValueMap;
-
-    struct SnapshotClosure {
-        std::vector<std::pair<int64_t, int64_t> > values;
-        braft::SnapshotWriter* writer;
-        braft::Closure* done;
-    };
 
     braft::Node* volatile _node;
     butil::atomic<int64_t> _leader_term;
-    ValueMap _value_map;
 };
 
 void DoneClosure::Run() {
     std::unique_ptr<DoneClosure> self_guard(this);
-    brpc::ClosureGuard done_guard(_done);
     if (status().ok()) {
         return;
     }
@@ -354,7 +204,7 @@ int main(int argc, char* argv[]) {
 
     // Generally you only need one Server.
     brpc::Server server;
-    example::StoreStateMachine store;
+    example::StoreStateMachine storeStateMachine;
 
     // raft can share the same RPC server. Notice the second parameter, because
     // adding services into a running server is not allowed and the listen
@@ -366,7 +216,7 @@ int main(int argc, char* argv[]) {
     }
 
     // It's recommended to start the server before StoreStateMachine is started to avoid
-    // the case that it becomes the leader while the service is unreacheable by
+    // the case that it becomes the leader while the service is unreachable by
     // clients.
     // Notice the default options of server is used here. Check out details from
     // the doc of brpc if you would like change some options;
@@ -376,7 +226,7 @@ int main(int argc, char* argv[]) {
     }
 
     // It's ok to start StoreStateMachine;
-    if (store.start() != 0) {
+    if (storeStateMachine.start() != 0) {
         LOG(ERROR) << "Fail to start StoreStateMachine";
         return -1;
     }
@@ -384,17 +234,18 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "StoreStateMachine service is running on " << server.listen_address();
     // Wait until 'CTRL-C' is pressed. then Stop() and Join() the service
     while (!brpc::IsAskedToQuit()) {
+        storeStateMachine.apply();
         sleep(1);
     }
 
     LOG(INFO) << "StoreStateMachine service is going to quit";
 
     // Stop counter before server
-    store.shutdown();
+    storeStateMachine.shutdown();
     server.Stop(0);
 
     // Wait until all the processing tasks are over.
-    store.join();
+    storeStateMachine.join();
     server.Join();
     return 0;
 }

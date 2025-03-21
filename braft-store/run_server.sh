@@ -1,52 +1,26 @@
 #!/bin/bash
 
-# source shflags from current directory
-mydir="${BASH_SOURCE%/*}"
-if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
-. $mydir/shflags
-
-# define command-line flags
-DEFINE_integer bthread_concurrency '18' 'Number of worker pthreads'
-DEFINE_string sync 'true' 'fsync each time'
-DEFINE_string valgrind 'false' 'Run in valgrind'
-DEFINE_integer max_segment_size '8388608' 'Max segment size'
-DEFINE_integer server_num '3' 'Number of servers'
-DEFINE_boolean clean 1 'Remove old "runtime" dir before running'
-DEFINE_integer port 8300 "Port of the first server"
-
-# parse the command-line
-FLAGS "$@" || exit 1
-eval set -- "${FLAGS_ARGV}"
-
 # The alias for printing to stderr
 alias error=">&2 echo store: "
 
 # hostname prefers ipv6
 IP=`hostname -i | awk '{print $NF}'`
 
-if [ "$FLAGS_valgrind" == "true" ] && [ $(which valgrind) ] ; then
-    VALGRIND="valgrind --tool=memcheck --leak-check=full"
-fi
-
 raft_peers=""
-for ((i=0; i<$FLAGS_server_num; ++i)); do
-    raft_peers="${raft_peers}${IP}:$((${FLAGS_port}+i)):0,"
+for ((i=0; i<3; ++i)); do
+    raft_peers="${raft_peers}${IP}:$((8300+i)):0,"
 done
-
-if [ "$FLAGS_clean" == "0" ]; then
-    rm -rf runtime
-fi
 
 export TCMALLOC_SAMPLE_PARAMETER=524288
 
-for ((i=0; i<$FLAGS_server_num; ++i)); do
+for ((i=0; i<3; ++i)); do
     mkdir -p runtime/$i
     cp ./build/store_server runtime/$i
     cd runtime/$i
-    ${VALGRIND} ./store_server \
-        -bthread_concurrency=${FLAGS_bthread_concurrency}\
-        -raft_max_segment_size=${FLAGS_max_segment_size} \
-        -raft_sync=${FLAGS_sync} \
-        -port=$((${FLAGS_port}+i)) -conf="${raft_peers}" > std.log 2>&1 &
+    ./store_server \
+        -bthread_concurrency=18\
+        -raft_max_segment_size=8388608 \
+        -raft_sync=false \
+        -port=$((8300+i)) -conf="${raft_peers}" > std.log 2>&1 &
     cd ../..
 done
