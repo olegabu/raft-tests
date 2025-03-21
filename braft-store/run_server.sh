@@ -21,6 +21,8 @@ for ((i=0; i<3; ++i)); do
         -bthread_concurrency=18\
         -raft_max_segment_size=8388608 \
         -raft_sync=false \
+        -batch_size=1000 \
+        -sleep_microseconds=1000 \
         -port=$((8300+i)) -conf="${raft_peers}" > std.log 2>&1 &
     cd ../..
 done

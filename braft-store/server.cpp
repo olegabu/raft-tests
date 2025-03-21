@@ -23,6 +23,8 @@ DEFINE_int32(snapshot_interval, 30, "Interval between each snapshot");
 DEFINE_string(conf, "", "Initial configuration of the replication group");
 DEFINE_string(data_path, "./data", "Path of data stored on");
 DEFINE_string(group, "StoreStateMachine", "Id of the replication group");
+DEFINE_uint32(batch_size, 1, "Size of batch of 32 byte messages");
+DEFINE_uint32(sleep_microseconds, 1000, "Sleep time in between batches in microseconds");
 
 namespace example {
 
@@ -89,24 +91,16 @@ public:
         }
     }
 
-    void apply() {
-        // Serialize request to the replicated write-ahead-log so that all the
-        // peers in the group receive this request as well.
-        // Notice that _value can't be modified in this routine otherwise it
-        // will be inconsistent with others in this group.
-
-        // Serialize request to IOBuf
+    void apply(butil::IOBuf data) {
         const int64_t term = _leader_term.load(butil::memory_order_relaxed);
         if (term < 0) {
             LOG(INFO) << "Not leader";
             return;
         }
-        butil::IOBuf log;
-        log.append(std::string("0123456789012345678901234567890123456789012345678901234567890123")); // 64 bytes
 
         // Apply this log as a braft::Task
         braft::Task task;
-        task.data = &log;
+        task.data = &data;
         // This callback would be invoked when the task actually executed or failed
         task.done = new DoneClosure();
         if (FLAGS_check_term) {
@@ -198,6 +192,29 @@ void DoneClosure::Run() {
 
 }  // namespace example
 
+const char* generateXString(unsigned short count) {
+    // Check for valid input (positive number)
+    if (count == 0) {
+        throw std::invalid_argument("Count must be a positive number");
+    }
+
+    // Each string is 32 bytes, total size includes null terminator
+    const size_t STRING_LENGTH = 31;
+    const size_t totalSize = count * STRING_LENGTH;
+    const size_t bufferSize = totalSize + 1; // +1 for null terminator
+
+    // Allocate memory for the string
+    char* result = new char[bufferSize];
+
+    // Fill with 'x'
+    std::memset(result, 'x', totalSize);
+
+    // Add null terminator
+    result[totalSize] = '\0';
+
+    return result;
+}
+
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     butil::AtExitManager exit_manager;
@@ -220,7 +237,7 @@ int main(int argc, char* argv[]) {
     // clients.
     // Notice the default options of server is used here. Check out details from
     // the doc of brpc if you would like change some options;
-    if (server.Start(FLAGS_port, NULL) != 0) {
+    if (server.Start(FLAGS_port, nullptr) != 0) {
         LOG(ERROR) << "Fail to start Server";
         return -1;
     }
@@ -232,11 +249,20 @@ int main(int argc, char* argv[]) {
     }
 
     LOG(INFO) << "StoreStateMachine service is running on " << server.listen_address();
+
+    butil::IOBuf data;
+
+    const char* s = generateXString(FLAGS_batch_size);
+
+    data.append(s); // 32 bytes
+
     // Wait until 'CTRL-C' is pressed. then Stop() and Join() the service
     while (!brpc::IsAskedToQuit()) {
-        storeStateMachine.apply();
-        sleep(1);
+        storeStateMachine.apply(data);
+        usleep(FLAGS_sleep_microseconds); // 1 millisecond by default
     }
+
+    delete s;
 
     LOG(INFO) << "StoreStateMachine service is going to quit";
 
