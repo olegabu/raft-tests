@@ -1,17 +1,3 @@
-// Copyright (c) 2018 Baidu.com, Inc. All Rights Reserved
-// 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-// 
-//     http://www.apache.org/licenses/LICENSE-2.0
-// 
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #include <fstream>
 #include <bthread/bthread.h>
 #include <gflags/gflags.h>
@@ -23,7 +9,6 @@
 #include <braft/raft.h>
 #include <braft/util.h>
 #include <braft/storage.h>
-#include <proto/atomic.pb.h>
 
 DEFINE_bool(allow_absent_key, false, "Cas succeeds if the key is absent while "
                                      " exptected value is exactly 0");
@@ -37,54 +22,38 @@ DEFINE_int32(port, 8100, "Listen port of this peer");
 DEFINE_int32(snapshot_interval, 30, "Interval between each snapshot");
 DEFINE_string(conf, "", "Initial configuration of the replication group");
 DEFINE_string(data_path, "./data", "Path of data stored on");
-DEFINE_string(group, "Atomic", "Id of the replication group");
+DEFINE_string(group, "StoreStateMachine", "Id of the replication group");
 
 namespace example {
 
-class Atomic;
+class StoreStateMachine;
 // Implements Closure which encloses RPC stuff
-class AtomicClosure : public braft::Closure {
+class DoneClosure : public braft::Closure {
 public:
-    AtomicClosure(Atomic* atomic,
-                  const google::protobuf::Message* request,
-                  AtomicResponse* response,
-                  google::protobuf::Closure* done)
-        : _atomic(atomic)
-        , _request(request)
-        , _response(response)
+    DoneClosure(StoreStateMachine* store,
+                google::protobuf::Closure* done)
+        : _store(store)
         , _done(done)
     {}
 
-    void Run();
-    const google::protobuf::Message* request() const { return _request; }
-    AtomicResponse* response() const { return _response; }
+    void Run() override;
 
 private:
-    Atomic* _atomic;
-    const google::protobuf::Message* _request;
-    AtomicResponse* _response;
+    StoreStateMachine* _store;
     google::protobuf::Closure* _done;
 };
 
-// Implementation of example::Atomic as a braft::StateMachine.
-class Atomic : public braft::StateMachine {
+// Implementation of example::StoreStateMachine as a braft::StateMachine.
+class StoreStateMachine : public braft::StateMachine {
 public:
-    // Define types for different operation
-    enum AtomicOpType {
-        OP_UNKNOWN = 0,
-        OP_GET = 1,
-        OP_EXCHANGE = 2,
-        OP_CAS = 3,
-    };
-
-    Atomic()
-        : _node(NULL)
+    StoreStateMachine()
+        : _node(nullptr)
         , _leader_term(-1)
     {
         CHECK_EQ(0, _value_map.init(FLAGS_map_capacity));
     }
 
-    ~Atomic() {
+    ~StoreStateMachine() override {
         delete _node;
     }
 
@@ -105,7 +74,7 @@ public:
         node_options.raft_meta_uri = prefix + "/raft_meta";
         node_options.snapshot_uri = prefix + "/snapshot";
         node_options.disable_cli = FLAGS_disable_cli;
-        braft::Node* node = new braft::Node(FLAGS_group, braft::PeerId(addr));
+        auto* node = new braft::Node(FLAGS_group, braft::PeerId(addr));
         if (node->init(node_options) != 0) {
             LOG(ERROR) << "Fail to init raft node";
             delete node;
@@ -115,29 +84,10 @@ public:
         return 0;
     }
 
-    // Impelements service methods
-    void get(const ::example::GetRequest* request,
-             ::example::AtomicResponse* response,
-             ::google::protobuf::Closure* done) {
-        return apply(OP_GET, request, response, done);
-    }
-
-    void exchange(const ::example::ExchangeRequest* request,
-                  ::example::AtomicResponse* response,
-                  ::google::protobuf::Closure* done) {
-        return apply(OP_EXCHANGE, request, response, done);
-    }
-
-    void compare_exchange(const ::example::CompareExchangeRequest* request,
-                          ::example::AtomicResponse* response,
-                          ::google::protobuf::Closure* done) {
-        return apply(OP_CAS, request, response, done);
-    }
-
-    // Shut this node down.
+    // Shuts this node down
     void shutdown() {
         if (_node) {
-            _node->shutdown(NULL);
+            _node->shutdown(nullptr);
         }
     }
 
@@ -149,10 +99,9 @@ public:
     }
 
 private:
-friend class AtomicClosure;
+friend class DoneClosure;
 
-    void apply(AtomicOpType type, const google::protobuf::Message* request,
-               AtomicResponse* response, google::protobuf::Closure* done) {
+    void apply(google::protobuf::Closure* done) {
         brpc::ClosureGuard done_guard(done);
         // Serialize request to the replicated write-ahead-log so that all the
         // peers in the group receive this request as well.
@@ -175,31 +124,20 @@ friend class AtomicClosure;
         // Apply this log as a braft::Task
         braft::Task task;
         task.data = &log;
-        // This callback would be iovoked when the task actually excuted or
+        // This callback would be invoked when the task actually executed or
         // fail
-        task.done = new AtomicClosure(this, request, response,
-                                      done_guard.release());
+        task.done = new DoneClosure(this, done_guard.release());
         if (FLAGS_check_term) {
-            // ABA problem can be avoid if expected_term is set
+            // ABA problem can be avoided if expected_term is set
             task.expected_term = term;
         }
         // Now the task is applied to the group, waiting for the result.
         return _node->apply(task);
     }
 
-    void redirect(AtomicResponse* response) {
-        response->set_success(false);
-        if (_node) {
-            braft::PeerId leader = _node->leader_id();
-            if (!leader.is_empty()) {
-                response->set_redirect(leader.to_string());
-            }
-        }
-    }
-
     // @braft::StateMachine
-    void on_apply(braft::Iterator& iter) {
-        // A batch of tasks are committed, which must be processed through 
+    void on_apply(braft::Iterator& iter) override {
+        // A batch of tasks is committed, which must be processed through
         // |iter|
         for (; iter.valid(); iter.next()) {
             // This guard helps invoke iter.done()->Run() asynchronously to
@@ -212,14 +150,14 @@ friend class AtomicClosure;
             uint8_t type = OP_UNKNOWN;
             data.cutn(&type, sizeof(uint8_t));
 
-            AtomicClosure* c = NULL;
+            DoneClosure* c = NULL;
             if (iter.done()) {
-                c = dynamic_cast<AtomicClosure*>(iter.done());
+                c = dynamic_cast<DoneClosure*>(iter.done());
             }
 
             const google::protobuf::Message* request = c ? c->request() : NULL;
-            AtomicResponse r;
-            AtomicResponse* response = c ? c->response() : &r;
+            StoreResponse r;
+            StoreResponse* response = c ? c->response() : &r;
             const char* op = NULL;
             // Execute the operation according to type
             switch (type) {
@@ -253,61 +191,38 @@ friend class AtomicClosure;
         }
     }
 
-    void on_snapshot_save(braft::SnapshotWriter* writer, braft::Closure* done) {
-
-        // Save current StateMachine in memory and starts a new bthread to avoid
-        // blocking StateMachine since it's a bit slow to write data to disk
-        // file.
-        SnapshotClosure* sc = new SnapshotClosure;
-        sc->values.reserve(_value_map.size());
-        sc->writer = writer;
-        sc->done = done;
-        for (ValueMap::const_iterator 
-                it = _value_map.begin(); it != _value_map.end(); ++it) {
-            sc->values.push_back(std::make_pair(it->first, it->second));
-        }
-
-        bthread_t tid;
-        bthread_start_urgent(&tid, NULL, save_snapshot, sc);
+    void on_snapshot_save(braft::SnapshotWriter* writer, braft::Closure* done) override {
+        LOG(INFO) << "Not implemented";
     }
 
-    int on_snapshot_load(braft::SnapshotReader* reader) {
-        CHECK_EQ(-1, _leader_term) << "Leader is not supposed to load snapshot";
-        _value_map.clear();
-        std::string snapshot_path = reader->get_path();
-        snapshot_path.append("/data");
-        std::ifstream is(snapshot_path.c_str());
-        int64_t id = 0;
-        int64_t value = 0;
-        while (is >> id >> value) {
-            _value_map[id] = value;
-        }
+    int on_snapshot_load(braft::SnapshotReader* reader) override {
+        LOG(INFO) << "Not implemented";
         return 0;
     }
 
-    void on_leader_start(int64_t term) {
+    void on_leader_start(int64_t term) override {
         _leader_term.store(term, butil::memory_order_release);
         LOG(INFO) << "Node becomes leader";
     }
 
-    void on_leader_stop(const butil::Status& status) {
+    void on_leader_stop(const butil::Status& status) override {
         _leader_term.store(-1, butil::memory_order_release);
         LOG(INFO) << "Node stepped down : " << status;
     }
 
-    void on_shutdown() {
+    void on_shutdown() override {
         LOG(INFO) << "This node is down";
     }
-    void on_error(const ::braft::Error& e) {
+    void on_error(const ::braft::Error& e) override {
         LOG(ERROR) << "Met raft error " << e;
     }
-    void on_configuration_committed(const ::braft::Configuration& conf) {
+    void on_configuration_committed(const ::braft::Configuration& conf) override {
         LOG(INFO) << "Configuration of this group is " << conf;
     }
-    void on_stop_following(const ::braft::LeaderChangeContext& ctx) {
+    void on_stop_following(const ::braft::LeaderChangeContext& ctx) override {
         LOG(INFO) << "Node stops following " << ctx;
     }
-    void on_start_following(const ::braft::LeaderChangeContext& ctx) {
+    void on_start_following(const ::braft::LeaderChangeContext& ctx) override {
         LOG(INFO) << "Node start following " << ctx;
     }
 
@@ -315,7 +230,7 @@ friend class AtomicClosure;
     
     void get_value(const butil::IOBuf& data,
                    const google::protobuf::Message* request,
-                   AtomicResponse* response) {
+                   StoreResponse* response) {
         int64_t id = 0;
         if (request) {
             // This task is applied by this node, get value from this
@@ -336,7 +251,7 @@ friend class AtomicClosure;
 
     void exchange(const butil::IOBuf& data,
                   const google::protobuf::Message* request,
-                  AtomicResponse* response) {
+                  StoreResponse* response) {
         int64_t id = 0;
         int64_t value = 0;
         if (request) {
@@ -363,7 +278,7 @@ friend class AtomicClosure;
 
     void cas(const butil::IOBuf& data,
                   const google::protobuf::Message* request,
-                  AtomicResponse* response) {
+                  StoreResponse* response) {
         int64_t id = 0;
         int64_t value = 0;
         int64_t expected = 0;
@@ -423,45 +338,13 @@ friend class AtomicClosure;
     ValueMap _value_map;
 };
 
-void AtomicClosure::Run() {
-    std::unique_ptr<AtomicClosure> self_guard(this);
+void DoneClosure::Run() {
+    std::unique_ptr<DoneClosure> self_guard(this);
     brpc::ClosureGuard done_guard(_done);
     if (status().ok()) {
         return;
     }
-    // Try redirect if this request failed.
-    _atomic->redirect(_response);
 }
-
-// Implements example::AtomicService if you are using brpc.
-class AtomicServiceImpl : public AtomicService {
-public:
-
-    explicit AtomicServiceImpl(Atomic* atomic) : _atomic(atomic) {}
-    ~AtomicServiceImpl() {}
-
-    void get(::google::protobuf::RpcController* controller,
-             const ::example::GetRequest* request,
-             ::example::AtomicResponse* response,
-             ::google::protobuf::Closure* done) {
-        return _atomic->get(request, response, done);
-    }
-    void exchange(::google::protobuf::RpcController* controller,
-                  const ::example::ExchangeRequest* request,
-                  ::example::AtomicResponse* response,
-                  ::google::protobuf::Closure* done) {
-        return _atomic->exchange(request, response, done);
-    }
-    void compare_exchange(::google::protobuf::RpcController* controller,
-                          const ::example::CompareExchangeRequest* request,
-                          ::example::AtomicResponse* response,
-                          ::google::protobuf::Closure* done) {
-        return _atomic->compare_exchange(request, response, done);
-    }
-
-private:
-    Atomic* _atomic;
-};
 
 }  // namespace example
 
@@ -471,15 +354,8 @@ int main(int argc, char* argv[]) {
 
     // Generally you only need one Server.
     brpc::Server server;
-    example::Atomic atomic;
-    example::AtomicServiceImpl service(&atomic);
+    example::StoreStateMachine store;
 
-    // Add your service into RPC rerver
-    if (server.AddService(&service, 
-                          brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-        LOG(ERROR) << "Fail to add service";
-        return -1;
-    }
     // raft can share the same RPC server. Notice the second parameter, because
     // adding services into a running server is not allowed and the listen
     // address of this server is impossible to get before the server starts. You
@@ -489,7 +365,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    // It's recommended to start the server before Atomic is started to avoid
+    // It's recommended to start the server before StoreStateMachine is started to avoid
     // the case that it becomes the leader while the service is unreacheable by
     // clients.
     // Notice the default options of server is used here. Check out details from
@@ -499,26 +375,26 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    // It's ok to start Atomic;
-    if (atomic.start() != 0) {
-        LOG(ERROR) << "Fail to start Atomic";
+    // It's ok to start StoreStateMachine;
+    if (store.start() != 0) {
+        LOG(ERROR) << "Fail to start StoreStateMachine";
         return -1;
     }
 
-    LOG(INFO) << "Atomic service is running on " << server.listen_address();
+    LOG(INFO) << "StoreStateMachine service is running on " << server.listen_address();
     // Wait until 'CTRL-C' is pressed. then Stop() and Join() the service
     while (!brpc::IsAskedToQuit()) {
         sleep(1);
     }
 
-    LOG(INFO) << "Atomic service is going to quit";
+    LOG(INFO) << "StoreStateMachine service is going to quit";
 
     // Stop counter before server
-    atomic.shutdown();
+    store.shutdown();
     server.Stop(0);
 
     // Wait until all the processing tasks are over.
-    atomic.join();
+    store.join();
     server.Join();
     return 0;
 }
