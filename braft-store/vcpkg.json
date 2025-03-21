@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "braft",
+    "gflags",
+    "protobuf",
+    "brpc"
+  ]
+}

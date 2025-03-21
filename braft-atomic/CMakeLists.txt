@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(test_braft)
+project(braft-atomic)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,3 +19,6 @@ target_link_libraries(atomic_server PRIVATE proto ${PACKAGE_LIBRARIES})
 
 add_executable(atomic_client client.cpp)
 target_link_libraries(atomic_client PRIVATE proto ${PACKAGE_LIBRARIES})
+
+add_executable(test test.cpp)
+target_link_libraries(test PRIVATE proto ${PACKAGE_LIBRARIES})

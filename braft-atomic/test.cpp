@@ -19,7 +19,7 @@
 #include <braft/raft.h>
 #include <braft/util.h>
 #include <braft/route_table.h>
-#include "atomic.pb.h"
+#include <proto/atomic.pb.h>
 
 DEFINE_int32(timeout_ms, 3000, "Timeout for each request");
 DEFINE_int64(atomic_id, 0, "atomic id");
@@ -227,7 +227,7 @@ int cas(const int64_t id, const int64_t old_value, const int64_t new_value) {
 }
 
 int main(int argc, char* argv[]) {
-    GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     // Register configuration of target group to RouteTable
     if (braft::rtb::update_configuration(FLAGS_group, FLAGS_conf) != 0) {
