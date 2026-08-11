@@ -19,21 +19,20 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
+
 # define command-line flags
-DEFINE_integer bthread_concurrency '18' 'Number of worker pthreads'
-DEFINE_string sync 'true' 'fsync each time'
-DEFINE_string valgrind 'false' 'Run in valgrind'
-DEFINE_integer max_segment_size '8388608' 'Max segment size'
-DEFINE_integer server_num '3' 'Number of servers'
 DEFINE_boolean clean 1 'Remove old "runtime" dir before running'
-DEFINE_integer port 8300 "Port of the first server"
+DEFINE_integer add_percentage 100 'Percentage of fetch_add operation'
+DEFINE_integer bthread_concurrency '8' 'Number of worker pthreads'
+DEFINE_integer server_port 8300 "Port of the first server"
+DEFINE_integer server_num '3' 'Number of servers'
+DEFINE_integer thread_num 1 'Number of sending thread'
+DEFINE_string log_each_request 'false' 'Print log for each request'
+DEFINE_string valgrind 'false' 'Run in valgrind'
+DEFINE_string use_bthread "true" "Use bthread to send request"
+DEFINE_string peers '' 'Comma-separated ip:port:index list; overrides the locally built peer list'
 
-# parse the command-line
 FLAGS "$@" || exit 1
-eval set -- "${FLAGS_ARGV}"
-
-# The alias for printing to stderr
-alias error=">&2 echo atomic: "
 
 # hostname prefers ipv6
 IP=`hostname -i | awk '{print $NF}'`
@@ -44,23 +43,20 @@ fi
 
 raft_peers=""
 for ((i=0; i<$FLAGS_server_num; ++i)); do
-    raft_peers="${raft_peers}${IP}:$((${FLAGS_port}+i)):0,"
+    raft_peers="${raft_peers}${IP}:$((${FLAGS_server_port}+i)):0,"
 done
 
-if [ "$FLAGS_clean" == "0" ]; then
-    rm -rf runtime
+if [ -n "$FLAGS_peers" ]; then
+    raft_peers="$FLAGS_peers"
 fi
 
 export TCMALLOC_SAMPLE_PARAMETER=524288
 
-for ((i=0; i<$FLAGS_server_num; ++i)); do
-    mkdir -p runtime/$i
-    cp ./build/atomic_server runtime/$i
-    cd runtime/$i
-    ${VALGRIND} ./atomic_server \
-        -bthread_concurrency=${FLAGS_bthread_concurrency}\
-        -raft_max_segment_size=${FLAGS_max_segment_size} \
-        -raft_sync=${FLAGS_sync} \
-        -port=$((${FLAGS_port}+i)) -conf="${raft_peers}" > std.log 2>&1 &
-    cd ../..
-done
+${VALGRIND} ./build/atomic_client \
+        --add_percentage=${FLAGS_add_percentage} \
+        --bthread_concurrency=${FLAGS_bthread_concurrency} \
+        --conf="${raft_peers}" \
+        --log_each_request=${FLAGS_log_each_request} \
+        --thread_num=${FLAGS_thread_num} \
+        --use_bthread=${FLAGS_use_bthread} \
+
