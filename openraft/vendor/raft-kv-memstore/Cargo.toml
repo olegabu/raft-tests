@@ -1,0 +1,42 @@
+[package]
+name = "raft-kv-memstore"
+version = "0.1.0"
+readme = "README.md"
+
+edition = "2024"
+authors = [
+    "drdr xp <drdr.xp@gmail.com>",
+    "Pedro Paulo de Amorim <pepa.amorim@gmail.com>",
+]
+categories = ["algorithms", "asynchronous", "data-structures"]
+description = "An example distributed key-value store built upon `openraft`."
+homepage = "https://github.com/databendlabs/openraft"
+keywords = ["raft", "consensus"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/databendlabs/openraft"
+
+[[bin]]
+name = "raft-key-value"
+path = "src/bin/main.rs"
+
+[dependencies]
+app-http        = { path = "../app-http" }
+log-mem         = { path = "../log-mem" }
+network-v2-http = { path = "../network-v2-http" }
+sm-mem          = { path = "../sm-mem" }
+openraft        = { version = "0.10.0-alpha.33", features = ["serde", "type-alias"] }
+types-kv        = { path = "../types-kv" }
+
+clap               = { version = "4.1.11", features = ["derive", "env"] }
+tokio              = { version = "1.35.1", features = ["full"] }
+tracing            = { version = "0.1.29" }
+tracing-subscriber = { version = "0.3.0", features = ["env-filter"] }
+
+[dev-dependencies]
+anyhow = { version = "1.0.63" }
+maplit = { version = "1.0.2" }
+
+[features]
+
+[package.metadata.docs.rs]
+all-features = true

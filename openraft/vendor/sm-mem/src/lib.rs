@@ -1,0 +1,233 @@
+//! Provide `StateMachineStore`, an in-memory KV state machine implementation.
+
+use std::collections::BTreeMap;
+use std::io;
+use std::io::Cursor;
+use std::sync::Arc;
+
+use futures::Stream;
+use futures::TryStreamExt;
+use futures::lock::Mutex;
+use openraft::EntryPayload;
+use openraft::OptionalSend;
+use openraft::RaftSnapshotBuilder;
+use openraft::RaftTypeConfig;
+use openraft::alias::DefaultEntryOf;
+use openraft::alias::LogIdOf;
+use openraft::alias::SnapshotMetaOf;
+use openraft::alias::SnapshotOf;
+use openraft::alias::StoredMembershipOf;
+use openraft::storage::EntryResponder;
+use openraft::storage::RaftStateMachine;
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Debug)]
+pub struct StoredSnapshot<C: RaftTypeConfig> {
+    pub meta: SnapshotMetaOf<C>,
+
+    /// The data of the state machine at the time of this snapshot.
+    pub data: Vec<u8>,
+}
+
+/// Data contained in the Raft state machine.
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct StateMachineData {
+    /// Application data.
+    pub data: BTreeMap<String, types_kv::VersionedValue>,
+}
+
+/// Inner storage for the state machine.
+#[derive(Debug)]
+pub struct StateMachineStoreInner<C: RaftTypeConfig> {
+    pub last_applied_log: Option<LogIdOf<C>>,
+
+    pub last_membership: StoredMembershipOf<C>,
+
+    /// The Raft state machine.
+    pub state_machine: StateMachineData,
+
+    /// The last received snapshot.
+    pub current_snapshot: Option<StoredSnapshot<C>>,
+}
+
+impl<C: RaftTypeConfig> Default for StateMachineStoreInner<C> {
+    fn default() -> Self {
+        Self {
+            last_applied_log: None,
+            last_membership: StoredMembershipOf::<C>::default(),
+            state_machine: StateMachineData::default(),
+            current_snapshot: None,
+        }
+    }
+}
+
+/// Defines a state machine for the Raft cluster.
+///
+/// This is a new type wrapper around `Arc<Mutex<StateMachineStoreInner<C>>>` to satisfy
+/// Rust's orphan rules when implementing foreign traits.
+#[derive(Clone, Debug)]
+pub struct StateMachineStore<C: RaftTypeConfig>(Arc<Mutex<StateMachineStoreInner<C>>>);
+
+impl<C: RaftTypeConfig> Default for StateMachineStore<C> {
+    fn default() -> Self {
+        Self(Arc::new(Mutex::new(StateMachineStoreInner::default())))
+    }
+}
+
+impl<C: RaftTypeConfig> StateMachineStore<C> {
+    /// Get a value from the state machine by key, locking the state machine.
+    pub async fn get(&self, key: &str) -> Option<types_kv::VersionedValue> {
+        let inner = self.0.lock().await;
+        inner.state_machine.data.get(key).cloned()
+    }
+}
+
+impl<C> RaftSnapshotBuilder<C> for StateMachineStore<C>
+where C: RaftTypeConfig<D = types_kv::Request, R = types_kv::Response, Entry = DefaultEntryOf<C>>
+{
+    type SnapshotData = Cursor<Vec<u8>>;
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn build_snapshot(&mut self) -> Result<SnapshotOf<C, Cursor<Vec<u8>>>, io::Error> {
+        let mut inner = self.0.lock().await;
+
+        let data =
+            serde_json::to_vec(&inner.state_machine.data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        let meta = SnapshotMetaOf::<C> {
+            last_log_id: inner.last_applied_log.clone(),
+            last_membership: inner.last_membership.clone(),
+        };
+
+        let snapshot = StoredSnapshot {
+            meta: meta.clone(),
+            data: data.clone(),
+        };
+
+        inner.current_snapshot = Some(snapshot);
+
+        Ok(SnapshotOf::<C, Cursor<Vec<u8>>> {
+            meta,
+            snapshot: Cursor::new(data),
+        })
+    }
+}
+
+impl<C> RaftStateMachine<C> for StateMachineStore<C>
+where C: RaftTypeConfig<D = types_kv::Request, R = types_kv::Response, Entry = DefaultEntryOf<C>>
+{
+    type SnapshotData = Cursor<Vec<u8>>;
+
+    type SnapshotBuilder = Self;
+
+    async fn applied_state(&mut self) -> Result<(Option<LogIdOf<C>>, StoredMembershipOf<C>), io::Error> {
+        let inner = self.0.lock().await;
+        Ok((inner.last_applied_log.clone(), inner.last_membership.clone()))
+    }
+
+    #[tracing::instrument(level = "trace", skip(self, entries))]
+    async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
+    where Strm: Stream<Item = Result<EntryResponder<C>, io::Error>> + Unpin + OptionalSend {
+        let mut inner = self.0.lock().await;
+
+        while let Some((entry, responder)) = entries.try_next().await? {
+            tracing::debug!(%entry.log_id, "replicate to sm");
+
+            let version = entry.log_id.index();
+            inner.last_applied_log = Some(entry.log_id.clone());
+
+            let response = match &entry.payload {
+                EntryPayload::Blank => types_kv::Response::none(),
+                EntryPayload::Normal(req) => match req {
+                    types_kv::Request::Set { key, value } => {
+                        inner.state_machine.data.insert(key.clone(), types_kv::VersionedValue {
+                            value: value.clone(),
+                            version,
+                        });
+                        types_kv::Response::new(value.clone(), version)
+                    }
+                    types_kv::Request::CompareAndSet {
+                        key,
+                        expected_version,
+                        value,
+                    } => {
+                        let matches = inner
+                            .state_machine
+                            .data
+                            .get(key)
+                            .is_some_and(|current| current.version == *expected_version);
+
+                        if matches {
+                            inner.state_machine.data.insert(key.clone(), types_kv::VersionedValue {
+                                value: value.clone(),
+                                version,
+                            });
+                            types_kv::Response::new(value.clone(), version)
+                        } else {
+                            types_kv::Response::none()
+                        }
+                    }
+                },
+                EntryPayload::Membership(mem) => {
+                    inner.last_membership = StoredMembershipOf::<C>::new(Some(entry.log_id.clone()), mem.clone());
+                    types_kv::Response::none()
+                }
+            };
+
+            if let Some(responder) = responder {
+                responder.send(response);
+            }
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self, snapshot))]
+    async fn install_snapshot(
+        &mut self,
+        meta: &SnapshotMetaOf<C>,
+        snapshot: Self::SnapshotData,
+    ) -> Result<(), io::Error> {
+        tracing::info!(
+            { snapshot_size = snapshot.get_ref().len() },
+            "decoding snapshot for installation"
+        );
+
+        let new_snapshot = StoredSnapshot {
+            meta: meta.clone(),
+            data: snapshot.into_inner(),
+        };
+
+        let updated_state_machine_data: BTreeMap<String, types_kv::VersionedValue> =
+            serde_json::from_slice(&new_snapshot.data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        let mut inner = self.0.lock().await;
+        inner.last_applied_log = meta.last_log_id.clone();
+        inner.last_membership = meta.last_membership.clone();
+        inner.state_machine = StateMachineData {
+            data: updated_state_machine_data,
+        };
+        inner.current_snapshot = Some(new_snapshot);
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn get_current_snapshot(&mut self) -> Result<Option<SnapshotOf<C, Self::SnapshotData>>, io::Error> {
+        let inner = self.0.lock().await;
+        match &inner.current_snapshot {
+            Some(snapshot) => {
+                let data = snapshot.data.clone();
+                Ok(Some(SnapshotOf::<C, Self::SnapshotData> {
+                    meta: snapshot.meta.clone(),
+                    snapshot: Cursor::new(data),
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn get_snapshot_builder(&mut self) -> Self::SnapshotBuilder {
+        self.clone()
+    }
+}

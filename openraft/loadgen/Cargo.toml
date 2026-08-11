@@ -1,0 +1,24 @@
+[package]
+name = "openraft-loadgen"
+version = "0.1.0"
+edition = "2021"
+
+# Deliberately does NOT depend on the openraft crate — this is a plain
+# HTTP/JSON client against raft-key-value's api-addr, mirroring braft's
+# client.cpp in design (see openraft/README.md).
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Wire types only (no openraft dependency) -- reuse the exact Request/Response
+# shapes the server speaks instead of redefining them here.
+types-kv = { path = "../vendor/types-kv" }
+
+[[bin]]
+name = "loadgen"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
