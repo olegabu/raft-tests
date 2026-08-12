@@ -86,7 +86,7 @@ Config comes from the shared `../.env` (see root `.env.example`); the flags belo
 | `PORT` | `start`, `client` | `8300` | Raft RPC/stats port on every node |
 | `SYNC` | `start` | `false` | `-raft_sync`; `true` fsyncs the log on every commit |
 | `PIPELINE` | `start` | `4` | `-raft_max_parallel_append_entries_rpc_num`; in-flight AppendEntries RPCs per follower. braft's own default is 1, which forces a full round trip before the next entry can go out and caps throughput under concurrency; raise it (e.g. `PIPELINE=8`) to let more batches overlap |
-| `THREADS` | `client` | `1` | `-thread_num`; concurrent sending threads on the load generator |
+| `THREADS` | `client` | `100` | `-thread_num`; concurrent sending threads on the load generator. All three products in this repo default to 100 outstanding requests so their numbers are directly comparable |
 | `CLIENT_CONCURRENCY` | `client` | `$(THREADS)` | `-bthread_concurrency` on the client; kept equal to `THREADS` by default so sending threads never queue for fewer real workers than they need — which would inflate measured latency with client-side scheduling delay rather than the cluster's own latency. Set explicitly to reintroduce that mismatch on purpose |
 
 Examples:
@@ -94,7 +94,8 @@ Examples:
 ```sh
 make start PIPELINE=8              # more AppendEntries pipelining per follower
 make start SYNC=true PIPELINE=8    # fsync + more pipelining
-make client THREADS=64             # CLIENT_CONCURRENCY follows automatically
+make client                        # 100 outstanding requests, the default
+make client THREADS=32             # override; CLIENT_CONCURRENCY follows automatically
 ```
 
 ### Multi-AZ: designating a starting leader
@@ -104,7 +105,7 @@ After `make deploy TOPOLOGY=multi_az` from the repo root (see root README),
 
 ```sh
 make transfer-leader            # designate NODE1 as the starting leader
-make client THREADS=32
+make client
 ```
 
 `make transfer-leader` forces `NODE1` to be the starting leader (needs

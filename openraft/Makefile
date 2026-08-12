@@ -9,7 +9,7 @@ API_PORT  ?= 21001
 RAFT_PORT ?= 22001
 
 # Load generator flags -- see loadgen/src/main.rs and README.md.
-THREADS ?= 1
+THREADS ?= 100
 # Real tokio worker threads; kept equal to THREADS by default so sending
 # tasks never queue for fewer real workers than they need -- which would
 # inflate measured latency with client-side scheduling delay rather than

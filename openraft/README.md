@@ -120,7 +120,7 @@ not a cumulative average.
 |---|---|---|---|
 | `API_PORT` | `start`, `client`, `init-cluster` | `21001` | Client-facing HTTP API port |
 | `RAFT_PORT` | `start`, `init-cluster` | `22001` | Inter-node raft RPC port |
-| `THREADS` | `client` | `1` | loadgen `--thread_num`; concurrent sending tasks |
+| `THREADS` | `client` | `100` | loadgen `--thread_num`; concurrent sending tasks. All three products in this repo default to 100 outstanding requests so their numbers are directly comparable |
 | `WORKER_THREADS` | `client` | `$(THREADS)` | loadgen `--worker_threads`; kept equal to `THREADS` by default so sending tasks never queue for fewer real workers than they need. Set explicitly to reintroduce that mismatch on purpose |
 | `CAS_PERCENTAGE` | `client` | `0` | loadgen `--cas_percentage` |
 | `VALUE_SIZE` | `client` | `64` | loadgen `--value_size` |
@@ -128,7 +128,8 @@ not a cumulative average.
 | `LOG_EACH_REQUEST` | `client` | `false` | set to `true` to pass `--log_each_request` |
 
 ```sh
-make client THREADS=32              # WORKER_THREADS follows automatically
+make client                         # 100 outstanding requests, the default
+make client THREADS=32              # override; WORKER_THREADS follows automatically
 make client CAS_PERCENTAGE=100 KEY=counter   # exercise the read+CAS increment path
 ```
 

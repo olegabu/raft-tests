@@ -6,7 +6,7 @@ include ../common.mk
 
 PORT     ?= 8300
 SYNC     ?= false
-THREADS  ?= 1
+THREADS  ?= 100
 # One bthread worker per sending thread, else threads queue for workers and
 # inflate measured latency instead of the raft cluster's own latency.
 CLIENT_CONCURRENCY ?= $(THREADS)
