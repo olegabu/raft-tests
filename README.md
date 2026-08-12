@@ -57,6 +57,23 @@ guess. `make node-rtt` pings between the deployed nodes (works in either
 topology) so you can see the real numbers and swap in `1d`/`1e`/`1f` if one
 leg is a clear outlier.
 
+### What `make node-rtt` actually measures
+
+Node-to-node only — not your dev machine, and not the client/C&C instance:
+
+1. Your dev machine `ssh`es into each of `NODE1`/`NODE2`/`NODE3` (public IPs)
+   in turn. That ssh hop is purely a remote-execution mechanism, not
+   something being timed.
+2. Once connected, it runs `ping` **on that remote node**, targeting the
+   other two nodes' **private IPs**.
+3. The reported RTTs are strictly the pairwise latency between the 3 raft
+   nodes themselves over their private VPC network — exactly the
+   leader→follower replication path.
+
+Your dev machine's own latency to AWS never factors into the numbers, and
+the client/C&C instance is never a ping source or target — its latency to
+the leader isn't measured by this tool.
+
 ### Instance types
 
 `deploy/main.tf` defaults both `node_instance_type` and `client_instance_type`
@@ -72,14 +89,23 @@ var with `-var` on `terraform apply`, or edit the defaults in `deploy/main.tf`.
 Instances run Ubuntu 22.04, chosen to match the glibc of binaries built on a
 typical Ubuntu 22 dev machine — build locally, `scp` the binary as-is.
 
-### Node stats / raft RPC port
+### Node stats / product ports
 
-`deploy/main.tf`'s `raft_port` variable (default `8300`) is opened in the
-security group to `ssh_ingress_cidr` only (same CIDR as ssh) — for whatever
-your raft implementation's server binds there, both RPC traffic and (for
-brpc-based implementations like braft) builtin HTTP stats pages multiplexed
-on the same port. If your product's server binds a different port, override
-`-var raft_port=<port>` on `terraform apply` to match.
+Each product gets its own CIDR-scoped ingress rule in `deploy/main.tf`,
+opened to `ssh_ingress_cidr` only (same CIDR as ssh) so you can reach it
+directly from your own machine — separate from the self-referencing rule
+that already covers client↔node traffic on any port for the benchmark
+itself to run:
+
+- `raft_port` (default `8300`) — braft's brpc server; both RPC traffic and
+  its builtin HTTP stats pages multiplexed on the same port.
+- `openraft_api_port` (default `21001`) — `raft-key-value`'s client-facing
+  HTTP API (`/metrics`, `/write`, `/read`, ...).
+
+If a product's server binds a different port than its variable's default,
+override it with `-var <name>=<port>` on `terraform apply` to match. Adding
+a new product with its own port follows the same pattern — a new variable
+plus a matching ingress rule.
 
 ## Adding a new raft product
 

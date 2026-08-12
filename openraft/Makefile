@@ -8,10 +8,13 @@ include ../common.mk
 API_PORT  ?= 21001
 RAFT_PORT ?= 22001
 
-# Load generator flags -- see loadgen/src/main.rs and README.md for the
-# full mapping against braft's client.cpp/run_client.sh flags.
-THREAD_NUM      ?= 1
-WORKER_THREADS  ?= 8
+# Load generator flags -- see loadgen/src/main.rs and README.md.
+THREADS ?= 1
+# Real tokio worker threads; kept equal to THREADS by default so sending
+# tasks never queue for fewer real workers than they need -- which would
+# inflate measured latency with client-side scheduling delay rather than
+# the cluster's own latency. Set explicitly to reintroduce that mismatch.
+WORKER_THREADS  ?= $(THREADS)
 CAS_PERCENTAGE  ?= 0
 VALUE_SIZE      ?= 64
 KEY             ?= bench
@@ -68,10 +71,10 @@ stop:
 		ssh $(SSH_OPTS) $(SSH_USER)@$$h "killall raft-key-value" ; \
 	done
 
-## Run the load generator from the client box (override THREAD_NUM=n)
+## Run the load generator from the client box (override THREADS=n)
 client:
 	ssh -t $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
-		"cd $(CLIENT_DIR) && ./loadgen --peers '$(API_PEERS)' --thread_num $(THREAD_NUM) \
+		"cd $(CLIENT_DIR) && ./loadgen --peers '$(API_PEERS)' --thread_num $(THREADS) \
 			--worker_threads $(WORKER_THREADS) --cas_percentage $(CAS_PERCENTAGE) \
 			--value_size $(VALUE_SIZE) --key $(KEY) $(LOG_EACH_REQUEST_FLAG)"
 

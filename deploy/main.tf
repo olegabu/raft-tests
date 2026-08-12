@@ -56,6 +56,11 @@ variable "raft_port" {
   default     = 8300
 }
 
+variable "openraft_api_port" {
+  description = "openraft raft-key-value's client-facing HTTP API port (/metrics, /write, /read, ...); opened from your own CIDR the same way raft_port is for braft"
+  default     = 21001
+}
+
 # Ubuntu 22.04 to match the glibc of binaries built on the dev machine
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -118,6 +123,14 @@ resource "aws_security_group" "raft" {
     description = "braft node stats/status pages (brpc builtin services over HTTP, same port as raft RPC)"
     from_port   = var.raft_port
     to_port     = var.raft_port
+    protocol    = "tcp"
+    cidr_blocks = [var.ssh_ingress_cidr]
+  }
+
+  ingress {
+    description = "openraft raft-key-value HTTP API (/metrics, /write, /read, ...)"
+    from_port   = var.openraft_api_port
+    to_port     = var.openraft_api_port
     protocol    = "tcp"
     cidr_blocks = [var.ssh_ingress_cidr]
   }
