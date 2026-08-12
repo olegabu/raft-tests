@@ -23,7 +23,10 @@ export PATH="$VCPKG_ROOT:$PATH"
 
 You may need to change paths to where your tools are installed in CMakePresets.json.
 
-Configure as default or release.
+Configure. `default` (and its alias `release`) build with optimizations —
+this is a benchmarking repo, so that's the default. Use `debug` instead only
+when you need unoptimized builds with assertions for troubleshooting a crash;
+debug binaries will badly distort any latency/throughput numbers.
 
 ```sh
 cmake --preset default .
@@ -35,7 +38,7 @@ Build.
 cmake --build build
 ```
 
-## Run
+## Run locally
 
 Start a local cluster of 3 nodes and tail the log of the first one.
 
