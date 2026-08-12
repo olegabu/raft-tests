@@ -1,9 +1,14 @@
 # Performance tests for implementations of Raft consensus
 
 Monorepo for performance tests of RAFT protocol implementations. Each
-subdirectory (e.g. `braft/`) is one implementation under test, with its own
-build/run/benchmark instructions in its own README. The AWS harness below is
-shared across all of them.
+subdirectory is one implementation under test, with its own build/run/benchmark
+instructions in its own README:
+
+- [`braft/`](braft/) — braft (C++, brpc), replicated atomic counter
+- [`openraft/`](openraft/) — openraft (Rust), HTTP key-value store
+- [`aeron/`](aeron/) — Aeron Cluster (Java, UDP), echo service
+
+The AWS harness below is shared across all of them.
 
 ## AWS harness
 
@@ -102,6 +107,9 @@ itself to run:
 - `openraft_api_port` (default `21001`) — `raft-key-value`'s client-facing
   HTTP API (`/metrics`, `/write`, `/read`, ...).
 
+Aeron Cluster has no such rule because it serves no HTTP status endpoint —
+there is nothing useful to reach from outside the cluster.
+
 If a product's server binds a different port than its variable's default,
 override it with `-var <name>=<port>` on `terraform apply` to match. Adding
 a new product with its own port follows the same pattern — a new variable
@@ -113,15 +121,28 @@ plus a matching ingress rule.
    does `-include ../.env` and `include ../common.mk` (for `SSH_USER`,
    `SSH_KEY`, `SSH_OPTS`, `NODES`).
 2. Add product-specific targets there: `push` (scp binaries), `start`/`stop`
-   (run the server), `client` (run your load generator), `logs`. See
-   `braft/Makefile` (one port, static peer config) or `openraft/Makefile`
-   (two ports per node, runtime-configured membership) for working examples
-   of two fairly different shapes.
+   (run the server), `client` (run your load generator), `logs`. The three
+   existing Makefiles cover fairly different shapes, so one of them is
+   probably close to what you need:
+   - `braft/Makefile` — one TCP port per node, static peer config
+   - `openraft/Makefile` — two TCP ports per node, membership configured at
+     runtime via an extra `init-cluster` step
+   - `aeron/Makefile` — a 100-port UDP block per node, static membership, and
+     a `provision` target because it needs a JVM installed on the instances
 3. Deploy/tear down the shared fleet from the repo root as above; run your
    product's own targets from its subdirectory.
 
+Keep the load generator closed-loop and its reporting line in the same shape
+the existing three use (`... at qps=<X> latency=<Y>` in microseconds, over a
+one-second rolling window), and default `THREADS` to 100 as they all do, so
+results can be read side by side. 100 outstanding requests is the common
+comparison point: every product is latency-bound there rather than resource
+bound, so `qps ≈ THREADS ÷ latency` holds and the two numbers are two views of
+the same measurement.
+
 No terraform changes are needed just to add a product with different or
 additional ports — the security group's self-referencing "all traffic within
-the cluster" rule already covers client↔node traffic on any port. The
+the cluster" rule already covers client↔node traffic on any port, for UDP as
+well as TCP. The
 `raft_port` variable only matters if you want to open a port to *your own
 laptop* (e.g. for stats pages), which is optional.

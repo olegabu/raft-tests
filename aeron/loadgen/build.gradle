@@ -1,0 +1,55 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'io.raftbench'
+version = '0.1.0'
+
+// Pin the compiler explicitly. On a dev box where `javac` on PATH is older than
+// `java` (JDK 8 vs 21 is a common Ubuntu state), relying on ambient javac fails
+// or silently targets the wrong release. Aeron 1.48 requires 17+.
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext.aeronVersion = '1.48.0'
+
+// aeron-samples is not referenced by our code. It is resolved only so that
+// collectLibs ships io.aeron.samples.cluster.EchoServiceNode -- the cluster
+// node the Makefile's `start` target runs -- out to the raft nodes.
+configurations {
+    nodeRuntime
+}
+
+dependencies {
+    implementation "io.aeron:aeron-cluster:${aeronVersion}"
+    nodeRuntime "io.aeron:aeron-samples:${aeronVersion}"
+}
+
+application {
+    mainClass = 'io.raftbench.aeron.Loadgen'
+}
+
+// One self-contained ../libs directory, pushed to both the raft nodes (which
+// need aeron-samples + aeron-cluster to run EchoServiceNode) and the client
+// (which needs aeron-cluster + this jar). Shipping one dir to both is a few MB
+// more than splitting them and removes any need for Maven Central access, or a
+// JVM classpath that differs per host role.
+tasks.register('collectLibs', Copy) {
+    into file("$projectDir/../libs")
+    from tasks.jar
+    from configurations.runtimeClasspath
+    from configurations.nodeRuntime
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('build') {
+    finalizedBy 'collectLibs'
+}
