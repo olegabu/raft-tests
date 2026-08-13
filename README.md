@@ -428,35 +428,39 @@ comfort-zone section below measures that.
 
 ### Comfort zones
 
-Comfort zone here means: the rate is fully sustained, p50 is still near the
-closed-loop floor, the tail has not yet turned, and drops stay under ~0.1%. Read
-the p99 column with it rather than assuming the tail is tight in absolute terms —
-openraft's p99 at the top of its zone is 3.4x its own floor, because it has no
-flat region to sit in at all.
+Comfort zone here means: the rate is fully sustained, drops stay under ~0.1%, and
+the tail is inside budget. **braft's bound is an explicit p99 budget of 3 ms** —
+the last rate it holds that at is 70k (2603 µs; 85k is already 4009 µs), and the
+budget is drawn on its chart so the zone edge is visibly derived from it. aeron
+and openraft are still bounded by where their own curves turn, which is a
+different rule, so the three edges are not strictly like-for-like. Applying the
+same 3 ms budget to all of them would give aeron **~640k** (it never exceeds
+1383 µs at any rate measured, so throughput bounds it, not latency) and openraft
+**~60k** (2813 µs, against 3131 µs at 70k). Aeron gains under that rule and
+openraft loses; say so if you want the table switched over.
 
 | Product | comfort zone | p50 / p99 there | p50 floor | knee | max sustained |
 |---|---|---|---|---|---|
 | aeron | **~400k** | 537 / 705 µs | 473 µs @ 50k | ~460k | ~626k |
-| braft | **~55k** | 748 / 1070 µs | 684 µs @ 10k † | 70k by the tail, ~90k by p50 | ~175k |
+| braft | **~70k** | 836 / 2603 µs | 684 µs @ 10k † | 70k by the tail, ~90k by p50 | ~175k |
 | openraft | **~85k** | 1387 / 4014 µs | 864 µs @ 10k | ~110k | ~128k |
 
 † with the swept `BURST=10`; braft reaches 575 µs at 10k under uniform arrivals,
 for reasons the burst section below covers.
 
-Aeron's comfort zone is 7.3x braft's and nearly 5x openraft's, at under three
-quarters of braft's p50 and two thirds of its p99 — which is the comparison this
+Aeron's comfort zone is 5.7x braft's and nearly 5x openraft's, at under two
+thirds of braft's p50 and a quarter of its p99 — which is the comparison this
 sweep exists to establish.
 
-braft's zone stops at 55k rather than running to its knee, and the tail is why.
-At 70k throughput is still exact and drops are nil, so on throughput alone 70k
-looks free — but p99 is 2603 µs there against 1070 µs at 55k. Paying 2.4x the
-tail for 27% more throughput is not a comfortable operating point, so the zone
-ends where the tail is still flat.
+Where inside its zone braft is run still matters, because the budget is a ceiling
+and not a description of the whole range. p99 sits at 1070 µs at 55k and 2603 µs
+at 70k: the last 27% of throughput costs 2.4x the tail. 70k is the most braft can
+be asked for under a 3 ms budget, not the rate at which it is comfortable.
 Settings per product: aeron `BURST=10 MAX_INFLIGHT=1000`; braft `BURST=10
 MAX_INFLIGHT=2000`; openraft `MAX_INFLIGHT=400`, burst irrelevant.
 
 **Idling the cluster does not buy much latency back — for two of the three.**
-Dropping braft from its comfort-zone rate to 10k gains 64 µs, or 9% (22% if the
+Dropping braft from its comfort-zone rate to 10k gains 152 µs, or 18% (30% if the
 arrival shape is relaxed too — see below), and aeron is *slower* at 25k than at
 50k. Consensus latency is dominated by a round trip that
 does not get cheaper when the machine is idle, so for those two, most of the
@@ -574,9 +578,9 @@ p99 has reached 2.7x its 969 µs floor while p50 has moved 14%. p50 holds on for
 another 20k and then goes between 85k and 100k — still 935 µs at 85k, already
 1608 µs at 100k — so its knee is marked at ~90k, interpolated rather than measured;
 no run was made there. Quoting p50 alone would put braft's capacity around 90k,
-29% above the rate at which its tail had already broken. Both are marked on its
-chart, as the two dashed rules; the shaded band ends earlier still, at 55k, where
-the tail is not merely unbroken but flat.
+29% above the rate at which its tail had already broken. The p50 knee is the
+dashed vertical on its chart; the tail knee is where p99 leaves the flat run at
+the left, just inside the 3 ms budget rule that bounds the shaded band.
 
 The flat `10` in the drop column from 10k through 145k is a fixed cost at rig
 startup, not a rate-dependent one: ten requests the client fails to place while

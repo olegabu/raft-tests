@@ -92,9 +92,10 @@ o.append('</svg>')
 open(f"{OUT}/knee-curves.svg","w").write("\n".join(o))
 
 # ---------- per product: p50 + p99, linear y, comfort band + knee rule ----------
+BUDGET={"braft": (3000, "3 ms p99 budget")}
 CFG={
- "braft":    (200000,25000,(600,15000),[700,1000,2000,3000,5000,10000], 55000,
-              [(70000,"tail turns",34),(90000,"knee (p50)",16)],
+ "braft":    (200000,25000,(600,15000),[700,1000,2000,3000,5000,10000], 70000,
+              [(90000,"knee (p50)",16)],
               "braft — the tail breaks first, at 70k",
               "p99 leaves p50 at 70k and is 10x its floor by 100k. Its rise below 35k is the arrival shape, not braft."),
  "openraft": (150000,25000,(800, 7000),[1000,1500,2000,3000,5000], 85000,
@@ -125,10 +126,18 @@ for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
         o.append(f'<text x="{kx+6:.1f}" y="{T+mdy}" font-size="11" font-weight="600" '
                  f'fill="{INK2}">{mlabel}</text>')
     axes(o,L,T,PW,PH,xmax,xstep,yticks,"latency (µs), log scale",ym,lambda v: f"{v:,}")
+    if name in BUDGET:
+        bval,blabel=BUDGET[name]
+        by=ym(bval)
+        o.append(f'<line x1="{L}" y1="{by:.1f}" x2="{L+PW}" y2="{by:.1f}" stroke="{INK2}" '
+                 f'stroke-width="1" stroke-dasharray="6 3"/>')
+        o.append(f'<text x="{L+PW-4:.1f}" y="{by-6:.1f}" font-size="11" fill="{INK2}" '
+                 f'text-anchor="end">{blabel}</text>')
     if name=="braft" and BURST1:
         series(o,BURST1,C3,xm,ym,"p99")
         last=BURST1[-1]
-        o.append(f'<text x="{xm(last["rate"])-6:.1f}" y="{ym(last["p99"])-12:.1f}" font-size="12" '
+        # -28 rather than -12: the 3 ms budget rule runs just under -12 here.
+        o.append(f'<text x="{xm(last["rate"])-6:.1f}" y="{ym(last["p99"])-28:.1f}" font-size="12" '
                  f'font-weight="600" fill="{INK}" text-anchor="end">p99, burst 1</text>')
     for key,col in (("p99",C2),("p50",C1)):
         series(o,D[name],col,xm,ym,key)
