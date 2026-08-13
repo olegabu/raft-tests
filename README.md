@@ -426,41 +426,105 @@ Those were all measured at 100k. Batching's *sign* is not fixed, though — for
 braft it flips below ~35k, where clumped arrivals cost more than they save. The
 comfort-zone section below measures that.
 
+### Batching, pipelining and in-flight: which knob does what
+
+"Batching" names four different things across the stack, and `BURST` is only the
+outermost one. They are easy to conflate because they all trade latency for
+throughput, but they do it at different layers and only two of them are ours.
+
+1. **`BURST` — arrival shape, in the rig.** B requests share one scheduled
+   instant, so the mean rate is unchanged and arrivals clump. It alters nothing
+   about how the cluster works; it alters what the cluster is asked to absorb.
+2. **Transport coalescing.** Several requests leave in one syscall or datagram.
+   This is what Aeron's 5x was: unbatched offers each paid a full trip through
+   the media driver.
+3. **Replication batching.** Several client requests ride in *one*
+   AppendEntries round, so a single quorum round trip commits many entries —
+   braft's `raft_max_entries_size` (1024 entries), surfaced by
+   `braft/run_server.sh` as `--max_entries_size`. This is the one that changes the
+   cost *per request*, because the round trip is the expensive part and it gets
+   divided.
+4. **Apply batching.** Committed entries handed to the state machine in groups:
+   braft's `raft_apply_batch` (32). Cheapest of the four here, since all three
+   products' state machine operations are trivial next to consensus.
+
+**`BURST` does not perform 2, 3 or 4 — it feeds them.** Requests arriving together
+give the transport something to coalesce and the leader something to put in one
+round. That is the whole reason it helps, and why the effect is transport-specific:
+openraft's HTTP/1.1 opens a connection per request, so there is nothing to
+coalesce onto and `BURST` does nothing for it. It is also why it *hurts* braft
+below 35k — see [arrival shape](#comfort-zones). At low rate the burst is the only
+thing in the pipeline, so instead of being absorbed it becomes the queue.
+
+**Pipelining is the orthogonal knob.** Batching puts more requests in one round
+trip; pipelining puts more round trips in flight at once. braft's `PIPELINE`
+(`raft_max_parallel_append_entries_rpc_num`, upstream default 1, this repo starts
+nodes with 4) caps how many AppendEntries RPCs the leader may have outstanding to
+a follower before it waits. Both raise throughput, and they touch latency
+differently: a batched request waits for its batch and then pays one round trip,
+while a pipelined request pays its own round trip but does not wait for the
+previous one to finish. Batching amortizes; pipelining overlaps.
+
+**In-flight is a consequence, not a knob.** (Reading "inlining" as in-flight /
+`MAX_INFLIGHT` — if you meant something else, say so.) Nothing sets the number of
+outstanding requests directly. Little's law fixes it: in open mode λ is `RATE`, so
+in-flight is whatever `RATE × latency` comes to — about 50 at braft's 65k and
+761 µs, about 215 at aeron's 400k and 537 µs. `MAX_INFLIGHT` is a ceiling on that
+number, not a target for it.
+
+The three interact in one way that matters in practice:
+
+- `BURST` raises instantaneous in-flight by B at a stroke. A burst arriving while
+  the cap is already reached is counted as dropped-by-rig, so `BURST` and
+  `MAX_INFLIGHT` have to be set together, not independently.
+- A cap set too low quietly becomes the thing being measured. Aeron at a fixed
+  100k went 690 → 1487 → 2289 µs at p50 as the cap went 100 → 500 → 2000, because
+  in-flight settles at whatever the cap permits.
+- Too high is equally wrong on a connection-per-request transport: openraft's
+  derived default of 5,500 exhausted HTTP connections and made requests fail
+  outright.
+
+| knob | layer | what it changes | effect on latency |
+|---|---|---|---|
+| `BURST` | rig | arrival shape | none by itself; feeds coalescing and replication batching |
+| — | transport | requests per syscall/datagram | large where per-message cost is large (aeron 5x) |
+| `--max_entries_size` | consensus | requests per AppendEntries round | amortizes the quorum round trip across entries |
+| `--apply_batch` | state machine | entries per apply | negligible here; these state machines are trivial |
+| `PIPELINE` | consensus | AppendEntries rounds in flight | overlaps round trips rather than amortizing them |
+| `MAX_INFLIGHT` | rig | ceiling on outstanding requests | caps queue depth, so it also caps observed latency |
+
 ### Comfort zones
 
-Comfort zone here means: the rate is fully sustained, drops stay under ~0.1%, and
-the tail is inside budget. **braft's bound is an explicit p99 budget of 3 ms** —
-the last rate it holds that at is 70k (2603 µs; 85k is already 4009 µs), and the
-budget is drawn on its chart so the zone edge is visibly derived from it. aeron
-and openraft are still bounded by where their own curves turn, which is a
-different rule, so the three edges are not strictly like-for-like. Applying the
-same 3 ms budget to all of them would give aeron **~640k** (it never exceeds
-1383 µs at any rate measured, so throughput bounds it, not latency) and openraft
-**~60k** (2813 µs, against 3131 µs at 70k). Aeron gains under that rule and
-openraft loses; say so if you want the table switched over.
+Comfort zone here means the same thing for all three: the last rate at which the
+curve has not yet turned — throughput fully sustained, drops under ~0.1%, and the
+tail still near its own floor. It is deliberately not a fixed latency target,
+because any absolute threshold picked after the fact flatters whichever product
+happens to sit under it. Read the p99 column alongside, since "near its own
+floor" is relative: openraft's p99 at the top of its zone is 3.4x its floor,
+having no flat region to sit in at all, while braft's and aeron's are 1.6x and
+1.3x.
 
 | Product | comfort zone | p50 / p99 there | p50 floor | knee | max sustained |
 |---|---|---|---|---|---|
 | aeron | **~400k** | 537 / 705 µs | 473 µs @ 50k | ~460k | ~626k |
-| braft | **~70k** | 836 / 2603 µs | 684 µs @ 10k † | 70k by the tail, ~90k by p50 | ~175k |
+| braft | **~65k** | 761 / 1590 µs | 684 µs @ 10k † | 65k by the tail, ~90k by p50 | ~175k |
 | openraft | **~85k** | 1387 / 4014 µs | 864 µs @ 10k | ~110k | ~128k |
 
 † with the swept `BURST=10`; braft reaches 575 µs at 10k under uniform arrivals,
 for reasons the burst section below covers.
 
-Aeron's comfort zone is 5.7x braft's and nearly 5x openraft's, at under two
-thirds of braft's p50 and a quarter of its p99 — which is the comparison this
-sweep exists to establish.
+Aeron's comfort zone is 6.2x braft's and nearly 5x openraft's, at 71% of braft's
+p50 and 44% of its p99 — which is the comparison this sweep exists to establish.
 
-Where inside its zone braft is run still matters, because the budget is a ceiling
-and not a description of the whole range. p99 sits at 1070 µs at 55k and 2603 µs
-at 70k: the last 27% of throughput costs 2.4x the tail. 70k is the most braft can
-be asked for under a 3 ms budget, not the rate at which it is comfortable.
+braft's edge is where its p99 starts climbing in earnest: 969 µs at 50k, 1070 at
+55k, 1128 at 60k, then 1590 at 65k and 2603 at 70k. 65k is the last rate before
+the tail runs away, and the step from there is steep enough that the next 8% of
+throughput costs 64% more tail.
 Settings per product: aeron `BURST=10 MAX_INFLIGHT=1000`; braft `BURST=10
 MAX_INFLIGHT=2000`; openraft `MAX_INFLIGHT=400`, burst irrelevant.
 
 **Idling the cluster does not buy much latency back — for two of the three.**
-Dropping braft from its comfort-zone rate to 10k gains 152 µs, or 18% (30% if the
+Dropping braft from its comfort-zone rate to 10k gains 77 µs, or 10% (23% if the
 arrival shape is relaxed too — see below), and aeron is *slower* at 25k than at
 50k. Consensus latency is dominated by a round trip that
 does not get cheaper when the machine is idle, so for those two, most of the
@@ -573,14 +637,14 @@ its own sweep and dropped 7.)
 | 175k | **170,035** | 10,855 µs | 13,535 µs | 70,277 | 1.34% |
 | 190k | **174,731** | 11,199 µs | 13,407 µs | **218,399** | 3.83% |
 
-The tighter steps separate braft's two knees cleanly. The tail turns at 70k, where
-p99 has reached 2.7x its 969 µs floor while p50 has moved 14%. p50 holds on for
-another 20k and then goes between 85k and 100k — still 935 µs at 85k, already
+The tighter steps separate braft's two knees cleanly. The tail turns at 65k, where
+p99 has reached 1.6x its 969 µs floor while p50 has moved 4%, and by 70k p99 is
+2.7x. p50 holds on much longer and then goes between 85k and 100k — still 935 µs at 85k, already
 1608 µs at 100k — so its knee is marked at ~90k, interpolated rather than measured;
 no run was made there. Quoting p50 alone would put braft's capacity around 90k,
-29% above the rate at which its tail had already broken. The p50 knee is the
-dashed vertical on its chart; the tail knee is where p99 leaves the flat run at
-the left, just inside the 3 ms budget rule that bounds the shaded band.
+38% above the rate at which its tail had already turned. On its chart the p50 knee
+is the dashed vertical; the tail knee is the shaded band's right edge, where p99
+leaves its flat run.
 
 The flat `10` in the drop column from 10k through 145k is a fixed cost at rig
 startup, not a rate-dependent one: ten requests the client fails to place while
