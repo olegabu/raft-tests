@@ -9,7 +9,22 @@ API_PORT  ?= 21001
 RAFT_PORT ?= 22001
 
 # Load generator flags -- see loadgen/src/main.rs and README.md.
+# MODE=closed holds THREADS requests outstanding; MODE=open emits at RATE req/s
+# on a fixed schedule and measures from each request's scheduled send time.
+MODE    ?= closed
 THREADS ?= 100
+RATE    ?=
+BURST   ?= 1
+MAX_INFLIGHT ?=
+WARMUP  ?= 10
+MEASURE ?= 30
+DRAIN_TIMEOUT ?= 10
+PACE    ?= spin
+HDR_OUT ?=
+
+OPEN_FLAGS = $(if $(RATE),--rate $(RATE),) --burst $(BURST) \
+             $(if $(MAX_INFLIGHT),--max_inflight $(MAX_INFLIGHT),)
+HDR_FLAG   = $(if $(HDR_OUT),--hdr_out $(HDR_OUT),)
 # Real tokio worker threads; kept equal to THREADS by default so sending
 # tasks never queue for fewer real workers than they need -- which would
 # inflate measured latency with client-side scheduling delay rather than
@@ -74,9 +89,14 @@ stop:
 ## Run the load generator from the client box (override THREADS=n)
 client:
 	ssh -t $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
-		"cd $(CLIENT_DIR) && ./loadgen --peers '$(API_PEERS)' --thread_num $(THREADS) \
+		"cd $(CLIENT_DIR) && ./loadgen --peers '$(API_PEERS)' \
+			--mode $(MODE) --pace $(PACE) \
+			--thread_num $(THREADS) $(OPEN_FLAGS) \
 			--worker_threads $(WORKER_THREADS) --cas_percentage $(CAS_PERCENTAGE) \
-			--value_size $(VALUE_SIZE) --key $(KEY) $(LOG_EACH_REQUEST_FLAG)"
+			--value_size $(VALUE_SIZE) --key $(KEY) \
+			--warmup $(WARMUP) --measure $(MEASURE) \
+			--drain_timeout $(DRAIN_TIMEOUT) \
+			$(HDR_FLAG) $(LOG_EACH_REQUEST_FLAG)"
 
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/std.log"

@@ -8,8 +8,27 @@ include ../common.mk
 PORT_BASE ?= 9000
 
 # Load generator flags -- see loadgen/src/main/java/.../Loadgen.java and README.md.
+# MODE=closed holds THREADS requests outstanding; MODE=open emits at RATE msg/s
+# on a fixed schedule and measures from each message's scheduled send time.
+MODE       ?= closed
 THREADS    ?= 100
+RATE       ?=
+BURST      ?= 1
+MAX_INFLIGHT ?=
 VALUE_SIZE ?= 64
+WARMUP     ?= 10
+MEASURE    ?= 30
+DRAIN_TIMEOUT ?= 10
+# How the open-mode scheduler waits between sends. This thread is also the only
+# caller of pollEgress, so the wait strategy decides how fast replies are even
+# noticed. spin is right when the client has a spare core (the benchmark setup);
+# park yields to the client's media driver and is better on a shared box.
+PACE       ?= spin
+HDR_OUT    ?=
+
+OPEN_FLAGS = $(if $(RATE),--rate $(RATE),) --burst $(BURST) \
+             $(if $(MAX_INFLIGHT),--max_inflight $(MAX_INFLIGHT),)
+HDR_FLAG   = $(if $(HDR_OUT),--hdr_out $(HDR_OUT),)
 # --log_each_request is a bare switch in loadgen (no true/false value), so
 # translate LOG_EACH_REQUEST=true into the flag and anything else into nothing.
 LOG_EACH_REQUEST ?= false
@@ -156,8 +175,12 @@ client:
 		   --hostnames $(HOSTNAMES) \
 		   --egress_host \$$(hostname -I | awk '{print \$$1}') \
 		   --port_base $(PORT_BASE) \
-		   --thread_num $(THREADS) \
-		   --value_size $(VALUE_SIZE) $(LOG_EACH_REQUEST_FLAG)"
+		   --mode $(MODE) --pace $(PACE) \
+		   --thread_num $(THREADS) $(OPEN_FLAGS) \
+		   --value_size $(VALUE_SIZE) \
+		   --warmup $(WARMUP) --measure $(MEASURE) \
+		   --drain_timeout $(DRAIN_TIMEOUT) \
+		   $(HDR_FLAG) $(LOG_EACH_REQUEST_FLAG)"
 
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/std.log"

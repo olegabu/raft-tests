@@ -88,6 +88,15 @@ Config comes from the shared `../.env` (see root `.env.example`); the flags belo
 | `PIPELINE` | `start` | `4` | `-raft_max_parallel_append_entries_rpc_num`; in-flight AppendEntries RPCs per follower. braft's own default is 1, which forces a full round trip before the next entry can go out and caps throughput under concurrency; raise it (e.g. `PIPELINE=8`) to let more batches overlap |
 | `THREADS` | `client` | `100` | `-thread_num`; concurrent sending threads on the load generator. All three products in this repo default to 100 outstanding requests so their numbers are directly comparable |
 | `CLIENT_CONCURRENCY` | `client` | `$(THREADS)` | `-bthread_concurrency` on the client; kept equal to `THREADS` by default so sending threads never queue for fewer real workers than they need — which would inflate measured latency with client-side scheduling delay rather than the cluster's own latency. Set explicitly to reintroduce that mismatch on purpose |
+| `MODE` | `client` | `closed` | `closed` keeps `THREADS` outstanding; `open` emits at `RATE` on a fixed schedule and measures from each request's scheduled send time. See [root README](../README.md#load-modes) |
+| `RATE` | `client` | — | requests/sec, required when `MODE=open` |
+| `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
+| `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
+| `WARMUP` | `client` | `10` | seconds discarded before measuring |
+| `MEASURE` | `client` | `30` | seconds recorded |
+| `DRAIN_TIMEOUT` | `client` | `10` | seconds to wait for in-flight replies after the window closes |
+| `PACE` | `client` | `spin` | open-mode wait strategy: `spin` when the client has a spare core, `park` on a shared box |
+| `HDR_OUT` | `client` | unset | write a percentile report to this path |
 
 Examples:
 

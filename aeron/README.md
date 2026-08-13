@@ -152,6 +152,15 @@ differs.
 | `THREADS` | `client` | `100` | loadgen `--thread_num`; outstanding requests. All three products in this repo default to 100 so their numbers are directly comparable |
 | `VALUE_SIZE` | `client` | `64` | loadgen `--value_size` |
 | `LOG_EACH_REQUEST` | `client` | `false` | set to `true` to pass `--log_each_request` |
+| `MODE` | `client` | `closed` | `closed` keeps `THREADS` outstanding; `open` emits at `RATE` on a fixed schedule and measures from each request's scheduled send time. See [root README](../README.md#load-modes) |
+| `RATE` | `client` | — | requests/sec, required when `MODE=open` |
+| `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
+| `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
+| `WARMUP` | `client` | `10` | seconds discarded before measuring |
+| `MEASURE` | `client` | `30` | seconds recorded |
+| `DRAIN_TIMEOUT` | `client` | `10` | seconds to wait for in-flight replies after the window closes |
+| `PACE` | `client` | `spin` | open-mode wait strategy: `spin` when the client has a spare core, `park` on a shared box |
+| `HDR_OUT` | `client` | unset | write a percentile report to this path |
 | `JVM_OPTS` | `start` | `-Xms1G -Xmx1G -XX:+AlwaysPreTouch` | node heap; Aeron's own rig uses 4G |
 | `INGRESS_CHANNEL` | `start`, `client` | `aeron:udp?term-length=64k` | required, see above |
 | `SPIN_IDLE` | `start`, `client` | `org.agrona.concurrent.BusySpinIdleStrategy` | idle strategy for the cluster and driver agents |
@@ -195,6 +204,15 @@ Aeron as it ships.
 Note the shape of the defaults' penalty: it is *fixed per handoff*, so it hurts
 most at low load and washes out as agents stay busy. Latency that barely moves
 as concurrency rises is the tell.
+
+It also makes service time depend on the *arrival pattern*, not just the arrival
+rate, which is visible as a disagreement between the two load modes: with
+parking strategies, open loop at a given rate measured 5.8× the latency closed
+loop measured at the same rate, because evenly spaced arrivals leave gaps for
+agents to park in while a closed loop never lets them idle. With the
+non-parking defaults this Makefile sets, the two modes agree to 13.8% (see the
+root README's cross-mode table). If you switch back to parking strategies,
+expect that agreement to break and do not read the difference as a rig fault.
 
 **Measured result** on a 3-node multi-AZ fleet of `c6i.2xlarge`, leader
 appointed to member 0 (the client's AZ), 100 outstanding requests, 37 second

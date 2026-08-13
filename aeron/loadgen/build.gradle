@@ -30,6 +30,9 @@ configurations {
 
 dependencies {
     implementation "io.aeron:aeron-cluster:${aeronVersion}"
+    // Already reaches libs/ transitively via aeron-archive, but a transitive
+    // runtime dependency is not on our compile classpath, so declare it.
+    implementation "org.hdrhistogram:HdrHistogram:2.2.2"
     nodeRuntime "io.aeron:aeron-samples:${aeronVersion}"
 }
 

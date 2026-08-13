@@ -3,6 +3,7 @@
     "braft",
     "gflags",
     "protobuf",
-    "brpc"
+    "brpc",
+    "hdr-histogram"
   ]
 }

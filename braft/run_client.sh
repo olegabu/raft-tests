@@ -31,6 +31,15 @@ DEFINE_string log_each_request 'false' 'Print log for each request'
 DEFINE_string valgrind 'false' 'Run in valgrind'
 DEFINE_string use_bthread "true" "Use bthread to send request"
 DEFINE_string peers '' 'Comma-separated ip:port:index list; overrides the locally built peer list'
+DEFINE_string mode 'closed' 'closed: keep thread_num outstanding. open: emit at rate'
+DEFINE_integer rate 0 'Target requests per second (open mode)'
+DEFINE_integer burst 1 'Requests per scheduled instant (open mode)'
+DEFINE_integer max_inflight 0 'Cap on unanswered requests (open mode); 0 derives one'
+DEFINE_integer warmup 10 'Seconds discarded before measuring'
+DEFINE_integer measure 30 'Seconds recorded'
+DEFINE_integer drain_timeout 10 'Seconds to wait for in-flight replies after the window'
+DEFINE_string pace 'spin' 'open mode wait strategy between sends: spin or park'
+DEFINE_string hdr_out '' 'Write a percentile report here'
 
 FLAGS "$@" || exit 1
 
@@ -59,4 +68,13 @@ ${VALGRIND} ./build/atomic_client \
         --log_each_request=${FLAGS_log_each_request} \
         --thread_num=${FLAGS_thread_num} \
         --use_bthread=${FLAGS_use_bthread} \
+        --mode=${FLAGS_mode} \
+        --rate=${FLAGS_rate} \
+        --burst=${FLAGS_burst} \
+        --max_inflight=${FLAGS_max_inflight} \
+        --warmup=${FLAGS_warmup} \
+        --measure=${FLAGS_measure} \
+        --drain_timeout=${FLAGS_drain_timeout} \
+        --pace=${FLAGS_pace} \
+        --hdr_out="${FLAGS_hdr_out}" \
 

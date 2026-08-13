@@ -126,6 +126,15 @@ not a cumulative average.
 | `VALUE_SIZE` | `client` | `64` | loadgen `--value_size` |
 | `KEY` | `client` | `bench` | loadgen `--key` |
 | `LOG_EACH_REQUEST` | `client` | `false` | set to `true` to pass `--log_each_request` |
+| `MODE` | `client` | `closed` | `closed` keeps `THREADS` outstanding; `open` emits at `RATE` on a fixed schedule and measures from each request's scheduled send time. See [root README](../README.md#load-modes) |
+| `RATE` | `client` | — | requests/sec, required when `MODE=open` |
+| `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
+| `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
+| `WARMUP` | `client` | `10` | seconds discarded before measuring |
+| `MEASURE` | `client` | `30` | seconds recorded |
+| `DRAIN_TIMEOUT` | `client` | `10` | seconds to wait for in-flight replies after the window closes |
+| `PACE` | `client` | `spin` | open-mode wait strategy: `spin` when the client has a spare core, `park` on a shared box |
+| `HDR_OUT` | `client` | unset | write a percentile report to this path |
 
 ```sh
 make client                         # 100 outstanding requests, the default

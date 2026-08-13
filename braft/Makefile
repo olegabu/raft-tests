@@ -6,7 +6,22 @@ include ../common.mk
 
 PORT     ?= 8300
 SYNC     ?= false
+# MODE=closed holds THREADS requests outstanding; MODE=open emits at RATE req/s
+# on a fixed schedule and measures from each request's scheduled send time.
+MODE     ?= closed
 THREADS  ?= 100
+RATE     ?=
+BURST    ?= 1
+MAX_INFLIGHT ?=
+WARMUP   ?= 10
+MEASURE  ?= 30
+DRAIN_TIMEOUT ?= 10
+PACE     ?= spin
+HDR_OUT  ?=
+
+OPEN_FLAGS = $(if $(RATE),--rate $(RATE),) --burst $(BURST) \
+             $(if $(MAX_INFLIGHT),--max_inflight $(MAX_INFLIGHT),)
+HDR_FLAG   = $(if $(HDR_OUT),--hdr_out $(HDR_OUT),)
 # One bthread worker per sending thread, else threads queue for workers and
 # inflate measured latency instead of the raft cluster's own latency.
 CLIENT_CONCURRENCY ?= $(THREADS)
@@ -58,7 +73,12 @@ stop:
 ## Run the load generator from the client box (override THREADS=n)
 client:
 	ssh -t $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
-		"cd $(CLIENT_DIR) && ./run_client.sh --peers '$(PEERS)' --thread_num $(THREADS) --bthread_concurrency $(CLIENT_CONCURRENCY)"
+		"cd $(CLIENT_DIR) && ./run_client.sh --peers '$(PEERS)' \
+			--mode $(MODE) --pace $(PACE) \
+			--thread_num $(THREADS) $(OPEN_FLAGS) \
+			--bthread_concurrency $(CLIENT_CONCURRENCY) \
+			--warmup $(WARMUP) --measure $(MEASURE) \
+			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG)"
 
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/runtime/0/std.log"
