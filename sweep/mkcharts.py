@@ -93,17 +93,20 @@ open(f"{OUT}/knee-curves.svg","w").write("\n".join(o))
 
 # ---------- per product: p50 + p99, linear y, comfort band + knee rule ----------
 CFG={
- "braft":    (200000,25000,(600,15000),[700,1000,2000,3000,5000,10000], 70000, 90000, "knee (p50)",
+ "braft":    (200000,25000,(600,15000),[700,1000,2000,3000,5000,10000], 55000,
+              [(70000,"tail turns",34),(90000,"knee (p50)",16)],
               "braft — the tail breaks first, at 70k",
               "p99 leaves p50 at 70k and is 10x its floor by 100k. Its rise below 35k is the arrival shape, not braft."),
- "openraft": (150000,25000,(800, 7000),[1000,1500,2000,3000,5000], 85000,110000, "knee",
+ "openraft": (150000,25000,(800, 7000),[1000,1500,2000,3000,5000], 85000,
+              [(110000,"knee",16)],
               "openraft — no flat stretch; latency climbs from the first step",
               "Latency never cliffs here; the dashed line is where drops take off instead."),
- "aeron":    (650000,100000,(450, 1500),[500,600,700,800,1000,1200], 400000,460000, "knee",
+ "aeron":    (650000,100000,(450, 1500),[500,600,700,800,1000,1200], 400000,
+              [(460000,"knee",16)],
               "aeron — flat to 400k, then one step up",
               "A 16x change in offered rate, 25k to 400k, moves p50 by 68 µs."),
 }
-for name,(xmax,xstep,yrange,yticks,comfort,knee,kneelabel,title,line2) in CFG.items():
+for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     W,H,L,R,T,B=820,440,78,120,86,74
     PW,PH=W-L-R,H-T-B
     ylo,yhi=math.log10(yrange[0]),math.log10(yrange[1])
@@ -113,13 +116,14 @@ for name,(xmax,xstep,yrange,yticks,comfort,knee,kneelabel,title,line2) in CFG.it
        "p50 and p99 latency, open loop. Hollow marker = the cluster fell behind the offered rate."])
     o.append(f'<rect x="{L}" y="{T}" width="{xm(comfort)-L:.1f}" height="{PH}" fill="{BAND}"/>')
     o.append(f'<text x="{L+8}" y="{T+16}" font-size="11" fill="{MUTED}">comfort zone</text>')
-    if name=="braft":
-        o.append(f'<text x="{xm(comfort)-8:.1f}" y="{T+16}" font-size="11" fill="{MUTED}" '
-                 f'text-anchor="end">tail turns &#8594;</text>')
-    kx=xm(knee)
-    o.append(f'<line x1="{kx:.1f}" y1="{T}" x2="{kx:.1f}" y2="{T+PH}" stroke="{MUTED}" '
-             f'stroke-width="1" stroke-dasharray="4 4"/>')
-    o.append(f'<text x="{kx+6:.1f}" y="{T+16}" font-size="11" font-weight="600" fill="{INK2}">{kneelabel}</text>')
+    # One dashed rule per inflection. braft has two -- the tail turns well before
+    # p50 does -- so their labels are staggered vertically to stay apart.
+    for mrate,mlabel,mdy in markers:
+        kx=xm(mrate)
+        o.append(f'<line x1="{kx:.1f}" y1="{T}" x2="{kx:.1f}" y2="{T+PH}" stroke="{MUTED}" '
+                 f'stroke-width="1" stroke-dasharray="4 4"/>')
+        o.append(f'<text x="{kx+6:.1f}" y="{T+mdy}" font-size="11" font-weight="600" '
+                 f'fill="{INK2}">{mlabel}</text>')
     axes(o,L,T,PW,PH,xmax,xstep,yticks,"latency (µs), log scale",ym,lambda v: f"{v:,}")
     if name=="braft" and BURST1:
         series(o,BURST1,C3,xm,ym,"p99")
