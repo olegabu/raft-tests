@@ -24,6 +24,9 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 DEFINE_boolean clean 1 'Remove old "runtime" dir before running'
 DEFINE_integer add_percentage 100 'Percentage of fetch_add operation'
 DEFINE_integer bthread_concurrency '8' 'Number of worker pthreads'
+DEFINE_integer event_dispatcher_num '1' 'brpc event dispatcher threads (socket read/parse)'
+DEFINE_string connection_type '' 'brpc connection type: single (default), pooled, short'
+DEFINE_integer channels 1 'Open mode: distinct connections to the leader, round-robin'
 DEFINE_integer server_port 8300 "Port of the first server"
 DEFINE_integer server_num '3' 'Number of servers'
 DEFINE_integer thread_num 1 'Number of sending thread'
@@ -76,5 +79,8 @@ ${VALGRIND} ./build/atomic_client \
         --measure=${FLAGS_measure} \
         --drain_timeout=${FLAGS_drain_timeout} \
         --pace=${FLAGS_pace} \
+        --event_dispatcher_num=${FLAGS_event_dispatcher_num} \
+        --connection_type="${FLAGS_connection_type}" \
+        --channels=${FLAGS_channels} \
         --hdr_out="${FLAGS_hdr_out}" \
 

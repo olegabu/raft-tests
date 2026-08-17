@@ -42,7 +42,9 @@
 
 #include <atomic>
 #include <cstdio>
+#include <memory>
 #include <string>
+#include <vector>
 
 DEFINE_bool(log_each_request, false, "Print log for each request");
 DEFINE_bool(use_bthread, false, "Use bthread to send requests");
@@ -61,6 +63,21 @@ DEFINE_int32(warmup, 10, "Seconds of traffic discarded before measuring");
 DEFINE_int32(measure, 30, "Seconds recorded");
 DEFINE_int32(drain_timeout, 10, "Seconds to wait for in-flight replies after the window closes");
 DEFINE_string(pace, "spin", "open mode wait strategy between sends: spin or park");
+// brpc's default connection type is "single": one TCP connection to the leader,
+// multiplexed, whose reads are parsed by one event-dispatcher thread on each
+// end. That is a serialization point independent of consensus, and it does not
+// go away by adding server threads -- one socket is handled by one dispatcher.
+// "pooled" gives each in-flight RPC its own connection, so parsing spreads over
+// -event_dispatcher_num threads. Empty leaves brpc's default in place.
+DEFINE_string(connection_type, "", "brpc connection type: single, pooled or short");
+// brpc keys its socket map on the address, so N channels to one leader share one
+// connection -- and one connection means one TCP stream, where a single lost
+// segment stalls everything queued behind it. That head-of-line blocking is
+// invisible in p50 and dominates p99. Channels in different connection_groups
+// get their own sockets, which gives a fixed pool of persistent multiplexed
+// connections: the tail relief of "pooled" without a connection per in-flight
+// RPC, so it does not exhaust ephemeral ports at six-figure rates.
+DEFINE_int32(channels, 1, "Open mode: distinct connections to the leader, round-robin");
 DEFINE_string(hdr_out, "", "Write a percentile report here");
 
 // One minute in microseconds: the histogram ceiling. brpc reports latency in
@@ -99,7 +116,8 @@ struct SendArg {
 // Selecting the leader and building a channel per request -- which this client
 // used to do inside its send loop -- is pure overhead repeated on every call.
 // One channel per sender, refreshed only when the leader actually moves.
-static bool refresh_channel(brpc::Channel* channel, braft::PeerId* leader) {
+static bool refresh_channel(brpc::Channel* channel, braft::PeerId* leader,
+                            const std::string& connection_group = std::string()) {
     if (braft::rtb::select_leader(FLAGS_group, leader) != 0) {
         butil::Status st = braft::rtb::refresh_leader(FLAGS_group, FLAGS_timeout_ms);
         if (!st.ok()) {
@@ -108,7 +126,12 @@ static bool refresh_channel(brpc::Channel* channel, braft::PeerId* leader) {
         }
         return false;
     }
-    if (channel->Init(leader->addr, NULL) != 0) {
+    brpc::ChannelOptions options;
+    if (!FLAGS_connection_type.empty()) {
+        options.connection_type = FLAGS_connection_type;
+    }
+    options.connection_group = connection_group;
+    if (channel->Init(leader->addr, &options) != 0) {
         LOG(ERROR) << "Fail to init channel to " << *leader;
         bthread_usleep(FLAGS_timeout_ms * 1000L);
         return false;
@@ -243,7 +266,8 @@ static void run_open_loop(int64_t start_us, int64_t end_us) {
     const double interval_us = 1000000.0 / (double)FLAGS_rate;
     const bool pace_spin = FLAGS_pace != "park";
     int64_t sequence = 0;
-    brpc::Channel channel;
+    const int nchannels = FLAGS_channels > 0 ? FLAGS_channels : 1;
+    std::vector<std::unique_ptr<brpc::Channel> > channels;
     braft::PeerId leader;
     bool have_channel = false;
 
@@ -267,7 +291,17 @@ static void run_open_loop(int64_t start_us, int64_t end_us) {
         }
 
         if (!have_channel) {
-            have_channel = refresh_channel(&channel, &leader);
+            channels.clear();
+            bool ok = true;
+            for (int c = 0; c < nchannels && ok; ++c) {
+                std::unique_ptr<brpc::Channel> ch(new brpc::Channel);
+                // One group per channel, so each gets its own socket.
+                ok = refresh_channel(ch.get(), &leader, "ch" + std::to_string(c));
+                if (ok) {
+                    channels.push_back(std::move(ch));
+                }
+            }
+            have_channel = ok;
             if (!have_channel) {
                 // Could not even resolve a leader; the messages that were due
                 // meanwhile were never offered, which is the rig's failure to
@@ -295,7 +329,7 @@ static void run_open_loop(int64_t start_us, int64_t end_us) {
             call->request.set_expected_value(sequence);
             call->request.set_new_value(sequence + 1);
 
-            example::AtomicService_Stub stub(&channel);
+            example::AtomicService_Stub stub(channels[sequence % nchannels].get());
             g_inflight.fetch_add(1, std::memory_order_relaxed);
             if (g_measuring.load(std::memory_order_relaxed)) {
                 int64_t lag = now_us() - scheduled_us;

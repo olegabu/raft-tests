@@ -21,6 +21,12 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 
 # define command-line flags
 DEFINE_integer bthread_concurrency '18' 'Number of worker pthreads'
+# brpc's own flag, default 1: one pthread does epoll + socket read/parse for
+# every connection. At six figures of small requests that thread is a candidate
+# serialization point well before consensus is. Raising it only helps if there
+# are several connections to spread across it -- see the client's
+# --connection_type.
+DEFINE_integer event_dispatcher_num '1' 'brpc event dispatcher threads (socket read/parse)'
 DEFINE_string sync 'false' 'fsync each time'
 DEFINE_string valgrind 'false' 'Run in valgrind'
 DEFINE_integer max_segment_size '8388608' 'Max segment size'
@@ -28,6 +34,22 @@ DEFINE_integer max_entries_size '1024' 'Max number of entries in one AppendEntri
 DEFINE_integer max_body_size '524288' 'Max byte size of one AppendEntriesRequest'
 DEFINE_integer max_parallel_append_entries_rpc_num '1' 'Max number of parallel AppendEntries RPCs in flight per follower'
 DEFINE_integer apply_batch '32' 'Max number of tasks applied to the FSM in a single batch'
+# All log appends funnel through one bthread ExecutionQueue, a single-consumer
+# serial queue. Its intended mitigation is batching: raft_leader_batch caps how
+# many pending appends one flush may carry. The batcher flushes whatever the queue
+# had available, so a larger cap cannot add waiting -- it only lets the batch grow
+# when the queue is already backed up, which is exactly the overload case.
+DEFINE_integer leader_batch '256' 'Max appends coalesced into one disk-queue flush'
+# Follower-side: when an AppendEntries arrives whose prev_log_index is ahead of the
+# follower's log, the default is to reject it and make the leader retry from an
+# earlier index -- a wasted round trip. With the cache the follower holds it until
+# the gap is filled. Gaps come from pipelining, so this pairs with PIPELINE.
+DEFINE_string enable_ae_cache 'false' 'Followers cache out-of-order AppendEntries'
+DEFINE_integer ae_cache_size '8' 'Max cached out-of-order AppendEntries RPCs'
+# braft's own tail tracer: logs any leader append slower than the threshold, with
+# a breakdown into queue wait / segment open / write / sync.
+DEFINE_string trace_append_latency 'false' 'Log slow leader appends with a phase breakdown'
+DEFINE_integer append_entry_high_lat_us '1000000' 'Threshold for the above, microseconds'
 DEFINE_integer fsm_caller_commit_batch '512' 'Max number of logs committed to the FSM in a single batch'
 DEFINE_integer max_append_buffer_size '262144' 'Max byte size of the log append buffer before flushing to LogStorage'
 DEFINE_integer server_num '3' 'Number of servers'
@@ -70,11 +92,17 @@ for ((i=0; i<$FLAGS_server_num; ++i)); do
     cd runtime/$i
     ${VALGRIND} ./atomic_server \
         -bthread_concurrency=${FLAGS_bthread_concurrency}\
+        -event_dispatcher_num=${FLAGS_event_dispatcher_num} \
         -raft_max_segment_size=${FLAGS_max_segment_size} \
         -raft_max_entries_size=${FLAGS_max_entries_size} \
         -raft_max_body_size=${FLAGS_max_body_size} \
         -raft_max_parallel_append_entries_rpc_num=${FLAGS_max_parallel_append_entries_rpc_num} \
         -raft_apply_batch=${FLAGS_apply_batch} \
+        -raft_leader_batch=${FLAGS_leader_batch} \
+        -raft_enable_append_entries_cache=${FLAGS_enable_ae_cache} \
+        -raft_max_append_entries_cache_size=${FLAGS_ae_cache_size} \
+        -raft_trace_append_entry_latency=${FLAGS_trace_append_latency} \
+        -raft_append_entry_high_lat_us=${FLAGS_append_entry_high_lat_us} \
         -raft_fsm_caller_commit_batch=${FLAGS_fsm_caller_commit_batch} \
         -raft_max_append_buffer_size=${FLAGS_max_append_buffer_size} \
         -raft_sync=${FLAGS_sync} \
