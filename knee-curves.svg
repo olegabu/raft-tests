@@ -47,26 +47,19 @@
 <circle cx="677.6" cy="346.2" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
 <circle cx="739.7" cy="350.7" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
 <text x="751.7" y="354.7" font-size="12" font-weight="600" fill="#0b0b0b">aeron</text>
-<path d="M88.3,379.4 L98.7,371.3 L109.0,374.9 L119.4,367.6 L124.5,373.8 L129.7,372.8 L134.9,370.8 L140.0,369.3 L145.2,369.2 L150.4,360.2 L165.9,349.5 L181.4,297.7 L196.9,275.3 L212.4,249.8 L227.9,209.3 L243.4,151.5 L258.9,115.1 L274.4,112.1" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="88.3" cy="379.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="98.7" cy="371.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="109.0" cy="374.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="119.4" cy="367.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="124.5" cy="373.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="129.7" cy="372.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="134.9" cy="370.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="140.0" cy="369.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="145.2" cy="369.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="150.4" cy="360.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="165.9" cy="349.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="181.4" cy="297.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="196.9" cy="275.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="212.4" cy="249.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="227.9" cy="209.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="243.4" cy="151.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="258.9" cy="115.1" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
-<circle cx="274.4" cy="112.1" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
-<text x="286.4" y="106.1" font-size="12" font-weight="600" fill="#0b0b0b">braft</text>
+<path d="M88.3,388.8 L103.8,383.8 L129.7,383.5 L155.5,379.8 L181.4,368.1 L207.2,354.4 L222.7,338.2 L233.1,310.6 L243.4,261.8 L258.9,116.3 L284.8,111.3" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="88.3" cy="388.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="103.8" cy="383.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="129.7" cy="383.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="155.5" cy="379.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="181.4" cy="368.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="207.2" cy="354.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="222.7" cy="338.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="233.1" cy="310.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="243.4" cy="261.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="258.9" cy="116.3" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="284.8" cy="111.3" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<text x="296.8" y="105.3" font-size="12" font-weight="600" fill="#0b0b0b">braft</text>
 <path d="M88.3,357.0 L98.7,350.3 L109.0,344.5 L119.4,340.8 L129.7,334.7 L134.9,333.7 L140.0,329.7 L150.4,324.1 L155.5,320.1 L165.9,311.8 L173.1,306.2 L181.4,300.8 L191.7,289.4 L202.1,277.2 L212.4,259.4 L222.7,247.6" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="88.3" cy="357.0" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="98.7" cy="350.3" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>

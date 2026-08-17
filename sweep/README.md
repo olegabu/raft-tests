@@ -2,7 +2,7 @@
 
 `knee-sweep.csv` is the raw output of the three open-loop rate sweeps whose
 numbers and charts appear in the [root README](../README.md#the-knee-and-why-it-only-shows-up-in-open-loop).
-49 rows, one per (product, offered rate), all latencies in microseconds:
+61 rows; a rate may repeat, and repeats are averaged for the charts, all latencies in microseconds:
 
 ```
 product,rate,achieved,p50,p90,p99,p999,max,dropped,lag
@@ -20,6 +20,22 @@ out. Every row was collected with a 10 s warmup and a 30 s measurement window,
 co-located with the client. Per-product `make client` flags are in the root README's comfort-zone
 section — they are not uniform, because `MAX_INFLIGHT` and `BURST` have to be set
 per transport.
+
+braft's rows were re-measured on a second fleet (same instance types, same
+multi-AZ layout) with **two repeats per rate through the knee**, after the first
+fleet was destroyed; `braft-knee-runs.csv` holds those runs individually, with a
+`rep` column. `mkcharts.py` averages repeated rates. The two fleets agree on shape
+but not exactly on level — the second is slightly faster (626 µs p50 at 55k against
+748 µs) — so braft's curve is entirely second-fleet rather than mixed, while
+openraft's and aeron's remain first-fleet. Do not compare braft's absolute floor
+against theirs to two significant figures.
+
+`braft-tuning.csv` is the first tuning ladder: 21 runs at a fixed 100k varying
+`event_dispatcher_num`, connection type, channel count, pipeline depth, server
+concurrency and the in-flight cap. All of it negative. `braft-ae-cache.csv` is the
+round that found the fix — `raft_enable_append_entries_cache`, which took p99 at 100k
+from 6171 µs to about 1030 µs. Both are summarised in
+[braft/README.md](../braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache).
 
 `braft-burst.csv` is a separate, smaller experiment: braft at 10k–50k under
 `BURST=1` and `BURST=10`, two or three repeats per point, plus one 40 s-warmup
@@ -58,6 +74,12 @@ curves are smooth — but the drop counts are not: aeron recorded 42 drops at 14
 and 36,528 at 290k with nothing between them to explain it. Treat any single drop
 figure under ~0.5% as noise, and repeat a rate before drawing a conclusion from
 one row.
+
+The comfort-zone edges in `mkcharts.py`'s `CFG` follow the root README's
+criterion, whose tail bound (p99 <= 3x p50) is a policy choice with a published
+sensitivity table — openraft's edge in particular moves from 60k to 85k between a
+2.5x and a 3.0x bound. If you change the bound, change `CFG` and the root README
+together; nothing recomputes them from the CSV.
 
 `mkcharts.py` has no dependencies — it emits SVG text directly. Per-product axis
 ranges, comfort-zone edges and knee positions are the `CFG` table near the bottom;

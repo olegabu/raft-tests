@@ -13,22 +13,21 @@ C1,C2,C3 = "#2a78d6","#eb6834","#1baf7a"
 FONT = 'system-ui,-apple-system,"Segoe UI",sans-serif'
 
 rows=[r for r in csv.DictReader(open(CSV))]
-D={}
+# A rate may appear more than once: repeats are how run-to-run spread gets
+# measured near the knee, where a single run says very little. Average them.
+_acc={}
 for r in rows:
-    D.setdefault(r["product"],[]).append({k:int(v) for k,v in r.items() if k!="product"})
+    _acc.setdefault((r["product"], int(r["rate"])), []).append(
+        {k: int(v) for k, v in r.items() if k != "product"})
+D={}
+for (prod, _rate), reps in _acc.items():
+    D.setdefault(prod, []).append(
+        {k: round(sum(x[k] for x in reps) / len(reps)) for k in reps[0]})
 for p in D: D[p].sort(key=lambda d:d["rate"])
 
 # braft's burst-1 arm, averaged over repeats. Plotted on the braft chart because
 # it is what explains that chart's left-hand p99 rise: the rise belongs to the
 # burst-10 arrival shape, not to braft.
-BURST1 = []
-_bp = os.path.join(HERE, "braft-burst.csv")
-if os.path.exists(_bp):
-    acc = {}
-    for r in csv.DictReader(open(_bp)):
-        if int(r["burst"]) == 1 and int(r["warmup"]) == 10:
-            acc.setdefault(int(r["rate"]), []).append(int(r["p99"]))
-    BURST1 = [{"rate": k, "p99": round(sum(v)/len(v)), "achieved": k} for k, v in sorted(acc.items())]
 def sat(d): return d["achieved"] < 0.99*d["rate"]
 
 def head(W,H,title,sub):
@@ -93,10 +92,10 @@ open(f"{OUT}/knee-curves.svg","w").write("\n".join(o))
 
 # ---------- per product: p50 + p99, linear y, comfort band + knee rule ----------
 CFG={
- "braft":    (200000,25000,(600,15000),[700,1000,2000,3000,5000,10000], 65000,
-              [(90000,"knee (p50)",16)],
-              "braft — the tail turns first, at 65k",
-              "p99 is 1.6x its floor at 65k, 10x by 100k. Green: the same p99 under uniform arrivals."),
+ "braft":    (210000,25000,(400,16000),[500,700,1000,2000,3000,5000,10000], 150000,
+              [(160000,"knee",16)],
+              "braft — flat to 150k, then both percentiles go together",
+              "p99 holds within 1.2-1.7x of p50 from 25k to 140k, then both turn together."),
  "openraft": (150000,25000,(800, 7000),[1000,1500,2000,3000,5000], 85000,
               [(110000,"knee",16)],
               "openraft — no flat stretch; latency climbs from the first step",
@@ -125,17 +124,12 @@ for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
         o.append(f'<text x="{kx+6:.1f}" y="{T+mdy}" font-size="11" font-weight="600" '
                  f'fill="{INK2}">{mlabel}</text>')
     axes(o,L,T,PW,PH,xmax,xstep,yticks,"latency (µs), log scale",ym,lambda v: f"{v:,}")
-    if name=="braft" and BURST1:
-        series(o,BURST1,C3,xm,ym,"p99")
-        last=BURST1[-1]
-        o.append(f'<text x="{xm(last["rate"])-6:.1f}" y="{ym(last["p99"])-12:.1f}" font-size="12" '
-                 f'font-weight="600" fill="{INK}" text-anchor="end">p99, burst 1</text>')
     for key,col in (("p99",C2),("p50",C1)):
         series(o,D[name],col,xm,ym,key)
         last=D[name][-1]
         o.append(f'<text x="{xm(last["rate"])+12:.1f}" y="{ym(last[key])+4:.1f}" font-size="12" '
                  f'font-weight="600" fill="{INK}">{key}</text>')
-    legend(o,L,H,[("p50",C1),("p99",C2)] + ([("p99, uniform arrivals (burst 1)",C3)] if name=="braft" and BURST1 else []))
+    legend(o,L,H,[("p50",C1),("p99",C2)])
     o.append('</svg>')
     open(f"{OUT}/knee-{name}.svg","w").write("\n".join(o))
 print(f"wrote knee-curves.svg and 3 per-product charts to {OUT}")

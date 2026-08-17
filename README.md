@@ -20,7 +20,7 @@ Prerequisites: terraform, an AWS profile with us-east-1 access, an ssh key
 pair.
 
 ```sh
-make deploy        # terraform apply -var-file=deploy/single_az.tfvars (TOPOLOGY=single_az by default)
+make deploy        # terraform apply -var-file=deploy/multi_az.tfvars (TOPOLOGY=multi_az by default)
 make env           # write EC2 IPs from terraform state into .env (gitignored)
 make node-rtt       # measure real inter-node RTT
 make destroy        # tear everything down
@@ -36,24 +36,32 @@ both this root `Makefile` and each product's own `Makefile` (via `-include
 `TOPOLOGY` selects a `deploy/*.tfvars` file and controls where the 3 raft
 nodes and the client land:
 
-- `single_az` (default, `deploy/single_az.tfvars`): all 4 instances in one
-  cluster placement group in one AZ — the low-latency floor.
-- `multi_az` (`deploy/multi_az.tfvars`): the 3 raft nodes spread across
+- `multi_az` (**default**, `deploy/multi_az.tfvars`): the 3 raft nodes spread across
   `node_azs` (default `us-east-1a`/`1b`/`1c`); the client stays colocated with
   `node[0]`/`NODE1` in its own 2-instance cluster placement group. AWS cluster
   placement groups are AZ-scoped, so there's no way to keep all 4 instances in
   one PG once the nodes are spread out — `node[1]`/`node[2]` are plain
   instances in their own AZs.
+- `single_az` (`deploy/single_az.tfvars`): all 4 instances in one cluster
+  placement group in one AZ — the low-latency floor.
+
+**multi-AZ is the default because it is the requirement.** A raft group that
+loses a whole availability zone and keeps serving has to have its voters in
+different AZs, so single-AZ numbers describe a deployment nobody would run for
+availability. The difference is not small: the cross-AZ quorum round trip
+measures 0.39 ms on this fleet and is most of braft's 601 µs p50 floor. Keeping
+`single_az` around is still useful — it isolates exactly what that round trip
+costs — but nothing published here is measured with it.
 
 ```sh
-make deploy TOPOLOGY=multi_az   # reapplies in place: only the 2 nodes whose
+make deploy                      # multi_az
+make deploy TOPOLOGY=single_az   # reapplies in place: only the 2 nodes whose
                                  # AZ changed get replaced, node[0] + client don't
-make env                        # refresh .env with the new IPs
+make env                         # refresh .env with the new IPs
 ```
 
-`make deploy TOPOLOGY=single_az` switches back the same way. Always pass the
-same `TOPOLOGY` to `deploy`/`destroy`/`plan` you last deployed with — it
-selects which `.tfvars` file describes the current state.
+Always pass the same `TOPOLOGY` to `deploy`/`destroy`/`plan` you last deployed
+with — it selects which `.tfvars` file describes the current state.
 
 AWS doesn't publish which AZs are physically closest to each other (and AZ
 *names* map to different physical zone-ids per account, so general advice
@@ -160,9 +168,7 @@ coordinated omission, and it is the first thing to check in any implementation
 here.
 
 Supporting flags, shared across products: `BURST` (messages per scheduled
-instant — same mean rate, clustered arrivals, for probing burst absorption; it
-turned out to matter more than expected, see
-[arrival shape](#comfort-zones)),
+instant — same mean rate, clustered arrivals, for probing burst absorption),
 `MAX_INFLIGHT` (bounds unanswered requests; hitting it counts as
 *dropped-by-rig* and a nonzero count invalidates the run's offered-rate claim
 rather than being silently skipped), `WARMUP`/`MEASURE`/`DRAIN_TIMEOUT`, `PACE`
@@ -300,11 +306,9 @@ and the tenth pays for issuing the previous nine. At a couple of µs per async b
 issue that is the 25–42 µs. openraft and aeron read 0–1 µs because their issue
 paths are cheaper (a spawn onto a runtime, and an `offer()` into a ring buffer).
 
-Two things follow. The lag is a real cost, correctly attributed — those requests
-genuinely did go out late, and the rule says charge it. And it bounds how much of
-the [arrival-shape finding](#comfort-zones) could be rig error: at 10k, `BURST=10`
-costs about 900 µs of p99 against at most 42 µs of lag, so the rig accounts for
-under 5% of it. The rest is the cluster.
+The lag is a real cost, correctly attributed — those requests genuinely did go out
+late, and the rule says charge it. It is also small enough to bound rig error in any
+finding drawn from these numbers: 42 µs against tails measured in milliseconds.
 
 `PACE` controls how the scheduler waits for the next instant: `spin` stays on-core
 for precision, `park` sleeps in 50 µs steps while more than 150 µs remain
@@ -356,9 +360,10 @@ Three signals mark it, and they don't arrive together:
 
 1. **p50 starts climbing** while throughput still tracks the offered rate.
 2. **The tail breaks first.** p99 can blow out while p50 still looks healthy —
-   braft's p99 goes 1070 → 2603 → 4009 µs across 55k, 70k and 85k while its p50
-   barely moves (748 → 836 → 935 µs). If you watch averages you miss this
-   entirely.
+   before its follower cache was enabled, braft's p99 went 970 → 2139 → 6999 µs
+   across 65k, 75k and 85k while its p50 barely moved (646 → 694 → 788 µs). If you
+   watch averages you miss that entirely. Enabling the cache removed it — the tail
+   now breaks with the median rather than 30k ahead of it.
 3. **`achieved` falls below `RATE`**, and drops climb. The system is now
    definitively past capacity.
 
@@ -452,9 +457,8 @@ throughput, but they do it at different layers and only two of them are ours.
 give the transport something to coalesce and the leader something to put in one
 round. That is the whole reason it helps, and why the effect is transport-specific:
 openraft's HTTP/1.1 opens a connection per request, so there is nothing to
-coalesce onto and `BURST` does nothing for it. It is also why it *hurts* braft
-below 35k — see [arrival shape](#comfort-zones). At low rate the burst is the only
-thing in the pipeline, so instead of being absorbed it becomes the queue.
+coalesce onto and `BURST` does nothing for it. At very low rates it can invert and
+cost a little, since a lone burst has nothing in the pipeline to be absorbed by.
 
 **Pipelining is the orthogonal knob.** Batching puts more requests in one round
 trip; pipelining puts more round trips in flight at once. braft's `PIPELINE`
@@ -493,93 +497,130 @@ The three interact in one way that matters in practice:
 | `PIPELINE` | consensus | AppendEntries rounds in flight | overlaps round trips rather than amortizing them |
 | `MAX_INFLIGHT` | rig | ceiling on outstanding requests | caps queue depth, so it also caps observed latency |
 
+### Dropped-by-rig: what it is, and whether it matters in production
+
+Every table here carries a drop column, and a run whose drops climb is not a run
+that achieved its offered rate. The rig drops a request in exactly two places,
+both in `braft/client.cpp`'s open-loop scheduler:
+
+1. **The in-flight cap is full** ([client.cpp:317](braft/client.cpp#L317)). Before
+   each send the scheduler checks `inflight >= MAX_INFLIGHT`; if so the request is
+   counted as dropped and never sent.
+2. **No leader is known** ([client.cpp:309](braft/client.cpp#L309)). If the leader
+   cannot be resolved, the whole burst due at that instant is counted as dropped.
+
+Nothing else counts as a drop. In particular a request that is sent and times out
+is *not* dropped — it is recorded as unanswered, separately. Drops are strictly
+"the rig never put this on the wire".
+
+That is why the flat `10` in braft's drop column at every rate up to 140k is not a
+rate-dependent cost: it is one `BURST=10` burst dropped by rule 2 while the client
+resolves the leader at startup, and it never recurs. Worth noting as a reporting
+wart: these counters are not gated on the measurement window the way the latency
+histogram is ([client.cpp:145](braft/client.cpp#L145)), so warmup drops are
+included in the run's total. For the startup burst that inflates every braft row
+by exactly 10; at high rates, where drops are dominated by rule 1 firing
+continuously, it makes little difference.
+
+**Is shedding acceptable in real life? Yes — and that is the point of the
+distinction.** A production client with a bounded outstanding-request budget (a
+connection pool, a semaphore, a thread pool) that refuses to enqueue beyond it is
+doing the correct thing. Unbounded queueing is how a slow dependency turns into a
+cascading outage: work piles up, every request eventually times out, and the
+system spends its capacity on responses nobody is waiting for any more. Shedding
+early and visibly is better behaviour than queueing forever.
+
+What is *not* acceptable is reporting a shed run as though the load had been
+carried. "braft sustained 100k with a 3.1 ms p99" is a false claim if 1.5% of that
+100k was never sent — the system was really asked for 98.5k, and the tail looks
+good precisely because the hardest requests were the ones discarded. So drops are
+fine as a client design and fatal as a benchmark result, which is why the comfort
+criterion above bounds them at 0.1% rather than ignoring them.
+
 ### Comfort zones
 
-Comfort zone here means the same thing for all three: the last rate at which the
-curve has not yet turned — throughput fully sustained, drops under ~0.1%, and the
-tail still near its own floor. It is deliberately not a fixed latency target,
-because any absolute threshold picked after the fact flatters whichever product
-happens to sit under it. Read the p99 column alongside, since "near its own
-floor" is relative: openraft's p99 at the top of its zone is 3.4x its floor,
-having no flat region to sit in at all, while braft's and aeron's are 1.6x and
-1.3x.
+Comfort zone here means the highest offered rate such that **every rate up to and
+including it** satisfies all three of:
+
+1. **throughput is really sustained** — achieved rate within 1% of offered,
+2. **the rig placed the load** — dropped-by-rig under 0.1% of offered,
+3. **the tail is still attached to the median** — p99 no more than **3x** p50.
+
+Two details of how that is applied matter more than they look. The zone is
+**contiguous from zero**, not "the highest rate that happens to pass": p99/p50 is
+*not* monotonic, because past the knee p50 inflates toward p99 and the ratio
+recovers. braft at 200k scores 1.3x — better than at 70k — with a p50 of 10.8 ms.
+Scanning for the last passing rate would return that. And a single failing rate
+whose neighbours both pass is treated as noise rather than the edge, because at one
+run per rate an isolated excursion cannot be told from a real one: aeron's 290k row
+shows 0.42% drops between neighbours at 0.06% and 0.04%, and without that rule it
+alone would cut aeron's zone from 400k to 250k.
+
+**The 3x is a policy choice, not a derivation — and it is the weakest thing here.**
+Using a *ratio* is defensible: it is dimensionless, so it means the same thing for a
+500 µs system and a 1.5 ms one, and it cannot be met by simply being slow. The
+*value* is not. It was picked, and its sensitivity is not small:
+
+| p99/p50 bound | braft | openraft | aeron |
+|---|---|---|---|
+| 2.0x | 140k | **30k** | 400k |
+| 2.5x | 150k | **60k** | 400k |
+| **3.0x** | **150k** | **85k** | **400k** |
+| 3.5x–6.0x | 160k | 85k | 400k |
+
+openraft moves by nearly 3x across a range of bounds that are all arguable, which
+is worth stating plainly: openraft's plateau ratio is about 2.9, so a 3.0x bound is
+the smallest round number that keeps its edge at 85k. That is uncomfortably close to
+choosing the threshold to preserve an answer already published, which is the exact
+failure the ratio was introduced to avoid. A reader who prefers 2.5x should read
+openraft's zone as 60k.
+
+braft is far steadier: 150k for any bound in 2.5–3.0x and 160k up to 6x, a **10k
+transition band** rather than the 70–80k spread it showed before its follower cache
+was enabled. Its tail and median now break together, so there is little room left
+for the choice of bound to matter.
+
+The rationale for standing at 3x, stated as reasoning rather than arithmetic: at 2x
+an unlucky request waits about as long as a typical one; at 3x it waits noticeably
+longer but in the same order of magnitude; past that the median has stopped
+describing what the service does. A tighter SLO justifies a tighter bound — the
+table above is there so you can substitute one without re-running anything.
+
+Where each product's edge falls under the 3x default, and what binds it:
+
+| Product | edge | p99/p50 there | first rate that fails, and why |
+|---|---|---|---|
+| braft | 150k | 2.2x | 160k — ratio 3.0x |
+| openraft | 85k | 2.9x | 92k — drops 0.15% |
+| aeron | 400k | 1.3x | 460k — drops 0.41%, and 520k confirms it |
+
+braft and aeron are bound by their tails; openraft runs out of placed load first.
 
 | Product | comfort zone | p50 / p99 there | p50 floor | knee | max sustained |
 |---|---|---|---|---|---|
 | aeron | **~400k** | 537 / 705 µs | 473 µs @ 50k | ~460k | ~626k |
-| braft | **~65k** | 761 / 1590 µs | 684 µs @ 10k † | 65k by the tail, ~90k by p50 | ~175k |
+| braft | **~150k** | 1404 / 3154 µs | 620 µs @ 10k † | ~160k | ~175k |
 | openraft | **~85k** | 1387 / 4014 µs | 864 µs @ 10k | ~110k | ~128k |
 
-† with the swept `BURST=10`; braft reaches 575 µs at 10k under uniform arrivals,
-for reasons the burst section below covers.
+† with the swept `BURST=10`; braft reaches 476 µs at 10k under uniform arrivals,
+for reasons the burst section below covers. braft's rows are measured with
+`raft_enable_append_entries_cache=true`, which this repo now sets by default — see
+[braft/README.md](braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache)
+for what it changed and why.
 
-Aeron's comfort zone is 6.2x braft's and nearly 5x openraft's, at 71% of braft's
-p50 and 44% of its p99 — which is the comparison this sweep exists to establish.
+Aeron's comfort zone is 2.7x braft's and nearly 5x openraft's — which is the
+comparison this sweep exists to establish, and it narrowed sharply once braft's
+follower cache was turned on: braft's edge moved from 70k to 150k.
 
-braft's edge is where its p99 starts climbing in earnest: 969 µs at 50k, 1070 at
-55k, 1128 at 60k, then 1590 at 65k and 2603 at 70k. 65k is the last rate before
-the tail runs away, and the step from there is steep enough that the next 8% of
-throughput costs 64% more tail.
-Settings per product: aeron `BURST=10 MAX_INFLIGHT=1000`; braft `BURST=10
-MAX_INFLIGHT=2000`; openraft `MAX_INFLIGHT=400`, burst irrelevant.
-
-**Idling the cluster does not buy much latency back — for two of the three.**
-Dropping braft from its comfort-zone rate to 10k gains 77 µs, or 10% (23% if the
-arrival shape is relaxed too — see below), and aeron is *slower* at 25k than at
-50k. Consensus latency is dominated by a round trip that
-does not get cheaper when the machine is idle, so for those two, most of the
-comfort zone is capacity you can spend without paying for it in latency.
-openraft is the exception: it gains 523 µs, or 38%, going from 85k to 10k — but
-that is not a floor being approached, it is the same near-linear cost curve
-described below, extended down. Its cheapest rate is simply its lowest one.
-
-**braft's low-rate tail belongs to the arrival shape, not to braft.** On the braft
-chart, p99 falls as load *rises* from 10k to 50k — 1583 µs down to about 1100 —
-which is backwards. It reproduces tightly (three runs at 10k: 1601 / 1579 /
-1570 µs; three at 50k: 1124 / 1103 / 1095 µs), so it is not noise, and a 40 s
-warmup instead of 10 s changes nothing (1595 µs). It is `BURST=10`:
-
-| offered | p50 burst 1 | p50 burst 10 | p99 burst 1 | p99 burst 10 |
-|---|---|---|---|---|
-| 10k | **586 µs** | 687 µs | **700 µs** | 1583 µs |
-| 20k | **663 µs** | 744 µs | **875 µs** | 1607 µs |
-| 25k | **678 µs** | — | **948 µs** | — |
-| 30k | **694 µs** | 717 µs | **1073 µs** | 1307 µs |
-| 40k | **734 µs** | 774 µs | 1498 µs | **1069 µs** |
-| 50k | 792 µs | **732 µs** | 2414 µs | **1107 µs** |
-
-Ten requests sharing one scheduled instant every 100 µs is a different workload
-from one request every 10 µs, even though the mean rate is identical — and which
-one braft prefers *depends on the rate*. Below ~35k, uniform arrivals win, and win
-big: at 10k, `BURST=1` gives a p99 of 700 µs against 1583. Above ~35k the ordering
-reverses and batching wins by as much. The two p99 curves cross at about 35k,
-which is where the green series on the braft chart passes the orange one.
-
-The clumped arrivals hurt at low rate because there is nothing else in the
-pipeline to absorb them: a burst of ten either fits in the outgoing
-append-entries round or splits across two, and the stragglers pay a second round
-trip — 1583 µs is 2.3x the 687 µs median, roughly the shape of one extra round
-trip. At 50k a round is always about to leave, so that penalty is amortized and
-batching's savings dominate instead.
-
-**Two consequences.** First, braft's real best case is better than anything in the
-sweep above: **p50 586 µs, p99 700 µs** at 10k with `BURST=1`, averaged over two
-runs — the better of them measured 575 / 685. Its p99 under uniform arrivals
-essentially equals its p50 under clumped ones. Second, the swept curves hold
-`BURST` fixed per product for comparability, which is the right call for comparing
-products but means each curve is one arrival shape, not an envelope. Where the
-shape matters — and for braft below 35k it matters by a factor of two in the tail —
-the curve understates what the system can do. This is exactly what the `BURST`
-knob was added for, and it is the first case in this repo where it changed a
-conclusion.
-
-Aeron shows the same signature (p50 521 µs at 25k against 473 µs at 50k), so its
-low-rate points are probably the same artifact. Untested — openraft cannot be,
-since HTTP/1.1 gives it nothing to batch onto, which is consistent with its curve
-being the one with no low-rate anomaly at all.
-
-Raw runs for the burst experiment: [sweep/braft-burst.csv](sweep/braft-burst.csv).
-
+**Idling the cluster does not buy much latency back.** Dropping braft from its
+comfort-zone rate to 10k gains 784 µs, though most of that is the knee itself; from
+100k it gains 150 µs, or 19%, and aeron is *slower* at 25k than at
+50k. Consensus latency is dominated by a round trip that does not get cheaper when
+the machine is idle — the cross-AZ quorum hop measures 0.39 ms here against
+braft's 601 µs floor — so most of each comfort zone is capacity you can spend
+without paying for it in latency. openraft is the exception: it gains 523 µs, or
+38%, going from 85k to 10k, but that is not a floor being approached, it is the
+near-linear cost curve described below extended down.
 
 #### aeron — flat to 400k, then a step up at 460k
 
@@ -614,45 +655,48 @@ revision of this file explained the 100k row's count as JIT warmup because it ra
 first in its sweep; the low-rate points refute that, since 25k also ran first in
 its own sweep and dropped 7.)
 
-#### braft — healthy p50 to 85k, but the tail goes at 70k
+#### braft — flat to 150k, then both percentiles go together
 
-| offered | achieved | p50 | p99 | dropped | of offered |
-|---|---|---|---|---|---|
-| 10k | 9,997 | 684 µs | 1,586 µs | 10 | 0.00% |
-| 20k | 19,994 | 744 µs | 1,607 µs | 10 | 0.00% |
-| 30k | 29,991 | 717 µs | 1,307 µs | 10 | 0.00% |
-| 40k | 39,963 | 774 µs | 1,069 µs | 10 | 0.00% |
-| 45k | 44,986 | 725 µs | 1,002 µs | 10 | 0.00% |
-| 50k | 49,985 | 733 µs | 969 µs | 10 | 0.00% |
-| 55k | 54,949 | 748 µs | 1,070 µs | 10 | 0.00% |
-| 60k | 59,982 | 760 µs | 1,128 µs | 10 | 0.00% |
-| 65k | 64,980 | 761 µs | 1,590 µs | 10 | 0.00% |
-| 70k | 69,935 | 836 µs | **2,603 µs** | 10 | 0.00% |
-| 85k | 84,925 | 935 µs | 4,009 µs | 10 | 0.00% |
-| 100k | 99,966 | 1,608 µs | 10,359 µs | 10 | 0.00% |
-| 115k | 114,948 | 2,032 µs | 9,719 µs | 10 | 0.00% |
-| 130k | 129,953 | 2,653 µs | 9,255 µs | 10 | 0.00% |
-| 145k | 144,904 | 4,051 µs | 9,031 µs | 10 | 0.00% |
-| 160k | 159,292 | 7,415 µs | 13,711 µs | 7,171 | 0.15% |
-| 175k | **170,035** | 10,855 µs | 13,535 µs | 70,277 | 1.34% |
-| 190k | **174,731** | 11,199 µs | 13,407 µs | **218,399** | 3.83% |
+| offered | achieved | p50 | p99 | p99/p50 | dropped | of offered |
+|---|---|---|---|---|---|---|
+| 10k | 9,997 | 620 µs | 918 µs | 1.5x | 10 | 0.00% |
+| 25k | 24,992 | 653 µs | 743 µs | 1.1x | 10 | 0.00% |
+| 50k | 49,984 | 655 µs | 784 µs | 1.2x | 10 | 0.00% |
+| 75k | 74,977 | 681 µs | 866 µs | 1.3x | 10 | 0.00% |
+| 100k | 99,952 | 770 µs | 1,032 µs | 1.3x | 536 | 0.02% |
+| 125k | 124,924 | 888 µs | 1,256 µs | 1.4x | 1,144 | 0.03% |
+| 140k | 139,958 | 1,052 µs | 1,799 µs | 1.7x | 10 | 0.00% |
+| 150k | 149,919 | 1,404 µs | 3,154 µs | 2.2x | 1,896 | 0.04% |
+| 160k | 159,898 | 2,340 µs | 7,111 µs | 3.0x | 3,336 | 0.07% |
+| 175k | **170,005** | 10,719 µs | 13,343 µs | 1.2x | **193,056** | 3.68% |
+| 200k | **175,323** | 11,295 µs | 13,423 µs | 1.2x | **1,036,148** | 17.27% |
 
-The tighter steps separate braft's two knees cleanly. The tail turns at 65k, where
-p99 has reached 1.6x its 969 µs floor while p50 has moved 4%, and by 70k p99 is
-2.7x. p50 holds on much longer and then goes between 85k and 100k — still 935 µs at 85k, already
-1608 µs at 100k — so its knee is marked at ~90k, interpolated rather than measured;
-no run was made there. Quoting p50 alone would put braft's capacity around 90k,
-38% above the rate at which its tail had already turned. On its chart the p50 knee
-is the dashed vertical; the tail knee is the shaded band's right edge, where p99
-leaves its flat run.
+Two repeats per rate from 100k to 160k, one elsewhere. Measured with
+`raft_enable_append_entries_cache=true`, braft's default in this repo since the
+[tuning work](braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache)
+found that leaving it off costs a wasted round trip whenever a pipelined
+AppendEntries reaches a follower ahead of a gap in its log.
 
-The flat `10` in the drop column from 10k through 145k is a fixed cost at rig
-startup, not a rate-dependent one: ten requests the client fails to place while
-the first connections come up, unchanged whether the run offers 300 thousand
-requests or 4 million. The first row where drops mean anything is 160k.
+That flag changed the *shape* of this curve, not just its level. With it off,
+braft had two widely separated knees — the tail turned at 75k while p50 held to
+about 105k — and p99 at 100k was 6171 µs against a p50 of 970 µs, a ratio of 8.3x.
+With it on, p99 at 100k is 1032 µs against 770 µs, a ratio of **1.3x**, and the two
+percentiles now break together at 150–160k. The tail no longer leads the median,
+because the thing that made it lead was retry traffic rather than queueing.
 
-Without batching the same 170k point measured a p50 of **104 ms** rather than
-10.9 ms — the overload behaviour is far worse when sends aren't coalesced.
+The remaining structure is ordinary: p99 stays within 1.2–1.7x of p50 from 25k to
+140k, reaches 2.2x at 150k and 3.0x at 160k, and past 175k the rig can no longer
+place the load (3.7% dropped at 175k, 17.3% at 200k) while achieved throughput
+ceilings at about 175k.
+
+**One residual quirk at the very bottom.** p99 at 10k is 918 µs against 743 µs at
+25k — slightly backwards, and it is the `BURST=10` arrival shape: ten requests
+sharing one scheduled instant have nothing else in the pipeline to be absorbed by, so
+stragglers pay a second round trip. Under uniform arrivals 10k measures 476/534 µs,
+which is braft's real floor. Outside 10k the effect is now within run-to-run noise
+(704 against 743 µs at 25k), so the swept curve is a fair representation of braft at
+every rate that matters. It was much larger before the follower cache was enabled,
+because retries left far more slack for clumping to consume.
 
 #### openraft — gradual, no cliff
 
