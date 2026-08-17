@@ -14,13 +14,17 @@ export TF_VAR_ssh_ingress_cidr := $(SSH_INGRESS_CIDR)
 # single_az: all 4 instances in one cluster placement group/AZ.
 # multi_az: raft nodes spread across deploy/multi_az.tfvars' node_azs, with
 # node[0]/NODE1 sharing the client's AZ + placement group.
-TOPOLOGY ?= single_az
+# multi_az is the default: a single-AZ cluster understates replication latency by
+# removing the cross-AZ round trip that any production raft deployment pays, so
+# every published number here is measured multi-AZ. single_az remains available
+# for isolating what that round trip costs.
+TOPOLOGY ?= multi_az
 # Relative to deploy/, since terraform -chdir=deploy resolves -var-file from there.
 TFVARS    = $(TOPOLOGY).tfvars
 
 .PHONY: deploy plan destroy env node-rtt
 
-## Create/update the EC2 fleet for $(TOPOLOGY) (switch with make deploy TOPOLOGY=multi_az)
+## Create/update the EC2 fleet for $(TOPOLOGY) (switch with make deploy TOPOLOGY=single_az)
 deploy:
 	terraform -chdir=deploy init
 	terraform -chdir=deploy apply -var-file=$(TFVARS)
