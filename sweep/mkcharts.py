@@ -80,11 +80,21 @@ o=head(W,H,"Flat, then a knee: three raft implementations under open-loop load",
    "Hollow marker = the cluster no longer kept up with the offered rate."])
 axes(o,L,T,PW,PH,XMAX,100000,[500,1000,2000,5000,10000],"p50 latency (log scale)",ym,
      lambda v: f"{v//1000} ms" if v>=1000 else f"{v} µs")
-DY={"aeron":4,"braft":-6,"openraft":18}
+# Where each series gets its direct label. aeron and braft label their own
+# line-end, to the right, same as always. openraft's line-end now sits inside
+# braft's steep climb (braft crosses above it around 145-150k), so a
+# right-of-last-point label would float on top of braft's line -- moved to an
+# early point on openraft's own curve instead, labelled to its *left*, where
+# only openraft is present (braft is a clear ~45-65px below it through this
+# whole range) and there is enough clearance from the y-axis to avoid the
+# tick labels.
+LABEL_AT = {"aeron": ("last", 12, 4), "braft": ("last", 12, -6), "openraft": (85000, -12, 4)}
 for name,col in (("aeron",C1),("braft",C2),("openraft",C3)):
     series(o,D[name],col,xm,ym,"p50")
-    last=D[name][-1]
-    o.append(f'<text x="{xm(last["rate"])+12:.1f}" y="{ym(last["p50"])+DY[name]:.1f}" font-size="12" '
+    at,dx,dy = LABEL_AT[name]
+    pt = D[name][-1] if at=="last" else next(p for p in D[name] if p["rate"]==at)
+    anchor = ' text-anchor="end"' if dx<0 else ""
+    o.append(f'<text x="{xm(pt["rate"])+dx:.1f}" y="{ym(pt["p50"])+dy:.1f}" font-size="12"{anchor} '
              f'font-weight="600" fill="{INK}">{name}</text>')
 legend(o,L,H,[("aeron",C1),("braft",C2),("openraft",C3)])
 o.append('</svg>')
@@ -92,10 +102,10 @@ open(f"{OUT}/knee-curves.svg","w").write("\n".join(o))
 
 # ---------- per product: p50 + p99, linear y, comfort band + knee rule ----------
 CFG={
- "braft":    (210000,25000,(400,16000),[500,700,1000,2000,3000,5000,10000], 150000,
-              [(160000,"knee",16)],
-              "braft — flat to 150k, then both percentiles go together",
-              "p99 holds within 1.2-1.7x of p50 from 25k to 140k, then both turn together."),
+ "braft":    (210000,25000,(400,80000),[500,700,1000,2000,3000,5000,10000,20000,50000], 160000,
+              [(165000,"knee",16)],
+              "braft — flat to 160k, then both percentiles go together",
+              "p99 holds within 1.2-2.4x of p50 from 10k to 150k, then both turn together."),
  "openraft": (150000,25000,(800, 7000),[1000,1500,2000,3000,5000], 85000,
               [(110000,"knee",16)],
               "openraft — no flat stretch; latency climbs from the first step",
