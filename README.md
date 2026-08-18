@@ -159,7 +159,7 @@ saturated system.
 `RATE` defaults to **100k** for all three products, so a bare `make client` offers
 the same load everywhere and the three are directly comparable. That single number
 sits in a different place on each curve, though — inside braft's comfort zone
-(~150k), past openraft's (~85k), and at a quarter of aeron's (~400k) — so a result
+(~160k), past openraft's (~85k), and well inside aeron's (~400k) — so a result
 is only meaningful next to the rate it came from. Every run prints its offered rate
 in the summary; quote it.
 
@@ -391,7 +391,7 @@ thing the chart is for. So each product also gets its own, over its own range of
 rate and latency, with p50 and p99 plotted together — the tail turns first, so the
 two curves separating *is* the knee:
 
-![braft: p50 flat near 800 microseconds through the comfort zone while p99 leaves it at 70k and reaches 10x its floor by 100k](knee-braft.svg)
+![braft: p50 and p99 flat together through the comfort zone to 160k, both breaking as one at the knee near 165k](knee-braft.svg)
 
 ![openraft: p50 and p99 both climb steadily from the lowest rate measured, with no flat stretch and no cliff](knee-openraft.svg)
 
@@ -399,7 +399,7 @@ two curves separating *is* the knee:
 
 Each was measured the same way: 10 s warmup, 30 s measurement window, one run per
 rate, `MODE=open`. Steps are tightest inside each comfort zone and through the
-knee — 5k apart for braft between 40k and 70k, 10k for openraft, 35–40k for aeron
+knee — 5-15k apart for braft between 100k and 170k, 10k for openraft, 35–40k for aeron
 — so the knee falls between steps rather than being straddled by one. 49 rows in
 all. The raw data, the sweep script and the chart generator are in
 [sweep/](sweep/), so every number below can be rechecked and the charts rebuilt
@@ -573,9 +573,9 @@ Using a *ratio* is defensible: it is dimensionless, so it means the same thing f
 
 | p99/p50 bound | braft | openraft | aeron |
 |---|---|---|---|
-| 2.0x | 140k | **30k** | 400k |
+| 2.0x | 115k | **30k** | 400k |
 | 2.5x | 150k | **60k** | 400k |
-| **3.0x** | **150k** | **85k** | **400k** |
+| **3.0x** | **160k** | **85k** | **400k** |
 | 3.5x–6.0x | 160k | 85k | 400k |
 
 openraft moves by nearly 3x across a range of bounds that are all arguable, which
@@ -585,10 +585,12 @@ choosing the threshold to preserve an answer already published, which is the exa
 failure the ratio was introduced to avoid. A reader who prefers 2.5x should read
 openraft's zone as 60k.
 
-braft is far steadier: 150k for any bound in 2.5–3.0x and 160k up to 6x, a **10k
-transition band** rather than the 70–80k spread it showed before its follower cache
-was enabled. Its tail and median now break together, so there is little room left
-for the choice of bound to matter.
+braft is far steadier still than it was: 160k from 3.0x through 6.0x, held there
+not by the ratio but by the drop criterion — 165k fails on 0.53% dropped regardless
+of how loose the ratio bound gets. A **5k transition band** (160k passes, 165k fails
+outright) against the 70–80k spread it showed before its follower cache and pipeline
+depth were tuned. Its tail and median now break together, so there is little room
+left for the choice of bound to matter.
 
 The rationale for standing at 3x, stated as reasoning rather than arithmetic: at 2x
 an unlucky request waits about as long as a typical one; at 3x it waits noticeably
@@ -600,7 +602,7 @@ Where each product's edge falls under the 3x default, and what binds it:
 
 | Product | edge | p99/p50 there | first rate that fails, and why |
 |---|---|---|---|
-| braft | 150k | 2.2x | 160k — ratio 3.0x |
+| braft | 160k | 2.8x | 165k — drops 0.53% |
 | openraft | 85k | 2.9x | 92k — drops 0.15% |
 | aeron | 400k | 1.3x | 460k — drops 0.41%, and 520k confirms it |
 
@@ -609,26 +611,32 @@ braft and aeron are bound by their tails; openraft runs out of placed load first
 | Product | comfort zone | p50 / p99 there | p50 floor | knee | max sustained |
 |---|---|---|---|---|---|
 | aeron | **~400k** | 537 / 705 µs | 473 µs @ 50k | ~460k | ~626k |
-| braft | **~150k** | 1404 / 3154 µs | 620 µs @ 10k † | ~160k | ~175k |
+| braft | **~160k** | 2449 / 6865 µs | 634 µs @ 10k † | ~165k | ~178k |
 | openraft | **~85k** | 1387 / 4014 µs | 864 µs @ 10k | ~110k | ~128k |
 
-† with the swept `BURST=10`; braft reaches 476 µs at 10k under uniform arrivals,
-for reasons the burst section below covers. braft's rows are measured with
-`raft_enable_append_entries_cache=true`, which this repo now sets by default — see
+† with the swept `BURST=10`, on the fleet current at the time of this table (a
+newer one than aeron's and openraft's rows — see
+[sweep/README.md](sweep/README.md) for the fleet-provenance note; treat any
+cross-product floor comparison as approximate for this reason). braft's rows are
+measured with `raft_enable_append_entries_cache=true` and `PIPELINE=8`, both this
+repo's defaults now — see
 [braft/README.md](braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache)
-for what it changed and why.
+for the cache finding and
+[braft/README.md](braft/README.md#deciding-pipeline) for
+why `PIPELINE=8` was adopted on top of it.
 
-Aeron's comfort zone is 2.7x braft's and nearly 5x openraft's — which is the
-comparison this sweep exists to establish, and it narrowed sharply once braft's
-follower cache was turned on: braft's edge moved from 70k to 150k.
+Aeron's comfort zone is 2.5x braft's and nearly 5x openraft's — which is the
+comparison this sweep exists to establish. braft's edge has moved twice: 70k
+before the follower cache, 150k after it alone, 160k with `PIPELINE=8` added on
+top.
 
 **Idling the cluster does not buy much latency back.** Dropping braft from its
-comfort-zone rate to 10k gains 784 µs, though most of that is the knee itself; from
-100k it gains 150 µs, or 19%, and aeron is *slower* at 25k than at
+comfort-zone rate to 10k gains 1,815 µs, though most of that is the knee itself;
+from 100k it gains 114 µs, or 15%, and aeron is *slower* at 25k than at
 50k. Consensus latency is dominated by a round trip that does not get cheaper when
-the machine is idle — the cross-AZ quorum hop measures 0.39 ms here against
-braft's 601 µs floor — so most of each comfort zone is capacity you can spend
-without paying for it in latency. openraft is the exception: it gains 523 µs, or
+the machine is idle — the cross-AZ quorum hop measures roughly 0.4 ms on any of
+these fleets — so most of each comfort zone is capacity you can spend without
+paying for it in latency. openraft is the exception: it gains 523 µs, or
 38%, going from 85k to 10k, but that is not a floor being approached, it is the
 near-linear cost curve described below extended down.
 
@@ -665,48 +673,66 @@ revision of this file explained the 100k row's count as JIT warmup because it ra
 first in its sweep; the low-rate points refute that, since 25k also ran first in
 its own sweep and dropped 7.)
 
-#### braft — flat to 150k, then both percentiles go together
+#### braft — flat to 160k, then both percentiles go together
 
 | offered | achieved | p50 | p99 | p99/p50 | dropped | of offered |
 |---|---|---|---|---|---|---|
-| 10k | 9,997 | 620 µs | 918 µs | 1.5x | 10 | 0.00% |
-| 25k | 24,992 | 653 µs | 743 µs | 1.1x | 10 | 0.00% |
-| 50k | 49,984 | 655 µs | 784 µs | 1.2x | 10 | 0.00% |
-| 75k | 74,977 | 681 µs | 866 µs | 1.3x | 10 | 0.00% |
-| 100k | 99,952 | 770 µs | 1,032 µs | 1.3x | 536 | 0.02% |
-| 125k | 124,924 | 888 µs | 1,256 µs | 1.4x | 1,144 | 0.03% |
-| 140k | 139,958 | 1,052 µs | 1,799 µs | 1.7x | 10 | 0.00% |
-| 150k | 149,919 | 1,404 µs | 3,154 µs | 2.2x | 1,896 | 0.04% |
-| 160k | 159,898 | 2,340 µs | 7,111 µs | 3.0x | 3,336 | 0.07% |
-| 175k | **170,005** | 10,719 µs | 13,343 µs | 1.2x | **193,056** | 3.68% |
-| 200k | **175,323** | 11,295 µs | 13,423 µs | 1.2x | **1,036,148** | 17.27% |
+| 10k | 9,997 | 634 µs | 746 µs | 1.2x | 10 | 0.00% |
+| 25k | 24,992 | 704 µs | 949 µs | 1.3x | 10 | 0.00% |
+| 40k | 39,987 | 651 µs | 799 µs | 1.2x | 10 | 0.00% |
+| 55k | 54,983 | 660 µs | 786 µs | 1.2x | 10 | 0.00% |
+| 70k | 69,978 | 684 µs | 823 µs | 1.2x | 10 | 0.00% |
+| 85k | 84,974 | 717 µs | 882 µs | 1.2x | 10 | 0.00% |
+| 100k | 99,969 | 748 µs | 984 µs | 1.3x | 10 | 0.00% |
+| 115k | 114,964 | 819 µs | 1,312 µs | 1.6x | 10 | 0.00% |
+| 130k | 129,961 | 964 µs | 1,942 µs | 2.0x | 10 | 0.00% |
+| 145k | 144,956 | 1,282 µs | 3,029 µs | 2.4x | 10 | 0.00% |
+| 150k | 149,957 | 1,474 µs | 3,513 µs | 2.4x | 10 | 0.00% |
+| 155k | 154,975 | 1,862 µs | 5,960 µs | 3.2x | 10 | 0.00% |
+| 160k | 159,955 | 2,449 µs | 6,865 µs | 2.8x | 10 | 0.00% |
+| 165k | 164,300 | 4,437 µs | 24,811 µs | 5.6x | 26,124 | 0.53% |
+| 170k | **167,813** | 7,677 µs | 42,343 µs | 5.5x | **82,016** | 1.61% |
+| 175k | **171,955** | 8,855 µs | 13,623 µs | 1.5x | **138,558** | 2.64% |
+| 190k | **177,806** | 10,559 µs | 13,615 µs | 1.3x | **477,680** | 8.38% |
+| 200k | **177,610** | 10,511 µs | 15,575 µs | 1.5x | **863,356** | 14.39% |
 
-Two repeats per rate from 100k to 160k, one elsewhere. Measured with
-`raft_enable_append_entries_cache=true`, braft's default in this repo since the
-[tuning work](braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache)
-found that leaving it off costs a wasted round trip whenever a pipelined
-AppendEntries reaches a follower ahead of a gap in its log.
+Two repeats per rate from 100k to 170k, one elsewhere. Measured with
+`raft_enable_append_entries_cache=true` and `PIPELINE=8`, both this repo's
+defaults now — see
+[what fixed braft's tail](braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache)
+for the first and [deciding PIPELINE](braft/README.md#deciding-pipeline)
+for the second. Schedule lag stayed at 16–39 µs across every run above, so these
+are system numbers, not rig error.
 
-That flag changed the *shape* of this curve, not just its level. With it off,
-braft had two widely separated knees — the tail turned at 75k while p50 held to
-about 105k — and p99 at 100k was 6171 µs against a p50 of 970 µs, a ratio of 8.3x.
-With it on, p99 at 100k is 1032 µs against 770 µs, a ratio of **1.3x**, and the two
-percentiles now break together at 150–160k. The tail no longer leads the median,
-because the thing that made it lead was retry traffic rather than queueing.
+Both flags changed the *shape* of this curve, not just its level, in two steps.
+Upstream (neither flag), braft had two widely separated knees — the tail turned at
+75k while p50 held to about 105k — and p99 at 100k was 6171 µs against a p50 of
+970 µs, a ratio of 8.3x. Enabling the follower cache alone (`PIPELINE` still at 4)
+brought the two together at 150–160k. Raising `PIPELINE` to 8 on top of that pushed
+the join again, to 160–165k, and made the ratio at 100k **1.3x** (748 µs / 984 µs
+here) — because the thing that had made the tail lead the median was retry
+traffic, and once pipelining stopped generating rejected RPCs there was nothing
+left to separate the two percentiles.
 
-The remaining structure is ordinary: p99 stays within 1.2–1.7x of p50 from 25k to
-140k, reaches 2.2x at 150k and 3.0x at 160k, and past 175k the rig can no longer
-place the load (3.7% dropped at 175k, 17.3% at 200k) while achieved throughput
-ceilings at about 175k.
+The remaining structure is ordinary: p99 stays within 1.2–2.4x of p50 from 10k to
+150k, a **5k transition band** (160k passes, 165k fails on drops, not ratio) marks
+the knee, and past 170k the rig can no longer place the load (2.6% dropped at
+175k, 14.4% at 200k) while achieved throughput plateaus around 178k. The 165k and
+170k rows are themselves the roughest part of the whole sweep — 165k's two reps
+disagreed by 4x on p99 (10,263 µs and 39,359 µs) — consistent with a rig sitting
+exactly astride its own knee, where which side of a brief stall a run happens to
+land on dominates the result.
 
-**One residual quirk at the very bottom.** p99 at 10k is 918 µs against 743 µs at
-25k — slightly backwards, and it is the `BURST=10` arrival shape: ten requests
-sharing one scheduled instant have nothing else in the pipeline to be absorbed by, so
-stragglers pay a second round trip. Under uniform arrivals 10k measures 476/534 µs,
-which is braft's real floor. Outside 10k the effect is now within run-to-run noise
-(704 against 743 µs at 25k), so the swept curve is a fair representation of braft at
-every rate that matters. It was much larger before the follower cache was enabled,
-because retries left far more slack for clumping to consume.
+**One residual quirk at the very bottom, smaller than before.** p99 at 10k is
+746 µs against 949 µs at 25k — slightly backwards, and it is the `BURST=10`
+arrival shape: ten requests sharing one scheduled instant have nothing else in
+the pipeline to be absorbed by, so stragglers pay a second round trip. The effect
+was much larger when this was first isolated, before the follower cache removed
+the retries that had been amplifying it (see
+[Batching](#batching-why-aerons-open-loop-latency-was-5-too-high) above for the
+schedule-lag evidence that bounds how much of it could be rig error); it is now
+small enough to sit inside the sweep's own noise rather than being a separate
+finding to chase.
 
 #### openraft — gradual, no cliff
 

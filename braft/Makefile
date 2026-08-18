@@ -35,8 +35,13 @@ HDR_FLAG   = $(if $(HDR_OUT),--hdr_out $(HDR_OUT),)
 CLIENT_CONCURRENCY ?= $(THREADS)
 # In-flight AppendEntries RPCs per follower; 1 (braft's own default) forces a
 # full round trip before the next entry can go out, capping throughput under
-# concurrency. Raise it so several batches can be in flight at once.
-PIPELINE ?= 4
+# concurrency. 8 held drops near-zero at 160k (10 and 10, the fixed startup
+# cost) where 4 was already shedding 0.4-0.8% of the offered rate at the same
+# rate -- and cost nothing at 55k/100k, where p99 was equal or slightly
+# better. AE_CACHE_SIZE=16 paired with it did not help further and looked
+# worse on this data; left at 8. See "Deciding PIPELINE" in the README for
+# the comparison.
+PIPELINE ?= 8
 # brpc socket read/parse threads, on nodes and client alike. brpc's default is 1,
 # so one pthread parses every connection -- a serialization point that has
 # nothing to do with consensus and shows up long before it. Raising this alone
@@ -78,13 +83,21 @@ PEERS      = $(NODE1_PRIV):$(PORT):0,$(NODE2_PRIV):$(PORT):0,$(NODE3_PRIV):$(POR
 NODE_DIR   = /data/atomic
 CLIENT_DIR = atomic
 
-.PHONY: push start stop client logs transfer-leader
+.PHONY: build push start stop client logs transfer-leader
 
 # Built separately from the braft repo (BUILD_TOOLS is off by default there):
 #   cmake --preset default -DBUILD_TOOLS=ON ~/workspace/braft
 #   cmake --build ~/workspace/braft/bld --target braft_cli
 # Only needed for `make transfer-leader`; push skips it silently if absent.
 BRAFT_CLI ?= ~/workspace/braft/bld/tools/output/bin/braft_cli
+
+## Build the server, client and test binaries. The `default` CMake preset
+## builds Release (this is a benchmarking repo, so that's the default -- see
+## README's debug-vs-release note); use `cmake --preset debug .` first for an
+## unoptimized build with assertions when troubleshooting a crash.
+build:
+	cmake --preset default .
+	cmake --build build
 
 ## Copy binaries and run scripts to all instances
 push:

@@ -2,7 +2,7 @@
 
 `knee-sweep.csv` is the raw output of the three open-loop rate sweeps whose
 numbers and charts appear in the [root README](../README.md#the-knee-and-why-it-only-shows-up-in-open-loop).
-61 rows; a rate may repeat, and repeats are averaged for the charts, all latencies in microseconds:
+57 rows; a rate may repeat, and repeats are averaged for the charts, all latencies in microseconds:
 
 ```
 product,rate,achieved,p50,p90,p99,p999,max,dropped,lag
@@ -21,21 +21,32 @@ co-located with the client. Per-product `make client` flags are in the root READ
 section — they are not uniform, because `MAX_INFLIGHT` and `BURST` have to be set
 per transport.
 
-braft's rows were re-measured on a second fleet (same instance types, same
-multi-AZ layout) with **two repeats per rate through the knee**, after the first
-fleet was destroyed; `braft-knee-runs.csv` holds those runs individually, with a
-`rep` column. `mkcharts.py` averages repeated rates. The two fleets agree on shape
-but not exactly on level — the second is slightly faster (626 µs p50 at 55k against
-748 µs) — so braft's curve is entirely second-fleet rather than mixed, while
-openraft's and aeron's remain first-fleet. Do not compare braft's absolute floor
-against theirs to two significant figures.
+braft's rows have gone through two re-measurements on two different fleets since
+the original sweep (same instance types, same multi-AZ layout each time), and the
+current `knee-sweep.csv` reflects only the latest: `braft-knee-runs.csv` (second
+fleet, `raft_enable_append_entries_cache=true`, `PIPELINE=4`, two repeats per rate
+through the knee) was superseded by `braft-pipeline8-knee.csv` (third fleet, same
+cache setting plus `PIPELINE=8` — see
+[Deciding PIPELINE](../braft/README.md#deciding-pipeline)
+— two repeats per rate from 100k to 170k). `mkcharts.py` averages repeated rates.
+The three fleets agree on shape but not exactly on level (55k p50: 748 µs on the
+first fleet, 626 µs on the second, 660 µs on the third), so braft's curve is
+entirely third-fleet rather than mixed, while openraft's and aeron's remain
+first-fleet. Do not compare braft's absolute floor against theirs to two
+significant figures — and do not compare braft's own historical numbers in this
+README's prose (e.g. the `AE_CACHE`-alone finding above) against the current CSV
+too precisely either, for the same reason.
 
 `braft-tuning.csv` is the first tuning ladder: 21 runs at a fixed 100k varying
 `event_dispatcher_num`, connection type, channel count, pipeline depth, server
 concurrency and the in-flight cap. All of it negative. `braft-ae-cache.csv` is the
 round that found the fix — `raft_enable_append_entries_cache`, which took p99 at 100k
-from 6171 µs to about 1030 µs. Both are summarised in
-[braft/README.md](../braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache).
+from 6171 µs to about 1030 µs. `braft-pipeline-cache.csv` is the second tuning round,
+on the third fleet: `PIPELINE=8` paired against `PIPELINE=8`+`AE_CACHE_SIZE=16`
+and against `EVENT_DISPATCHERS=2`/`SERVER_CONCURRENCY=6`, `PIPELINE=8` alone
+adopted as the result. All three are summarised in
+[braft/README.md](../braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache)
+and [braft/README.md](../braft/README.md#deciding-pipeline).
 
 `braft-burst.csv` is a separate, smaller experiment: braft at 10k–50k under
 `BURST=1` and `BURST=10`, two or three repeats per point, plus one 40 s-warmup
@@ -85,3 +96,11 @@ together; nothing recomputes them from the CSV.
 ranges, comfort-zone edges and knee positions are the `CFG` table near the bottom;
 they are read off the data by hand rather than fitted, so re-check them against
 any new sweep instead of assuming they still hold.
+
+`../knee-braft-before-ae-cache.svg` is the one chart in the repo root
+`mkcharts.py` does not produce: it is
+[commit `59e4e51`'s `knee-braft.svg`](https://github.com/olegabu/raft-tests/blob/59e4e51/knee-braft.svg),
+restored verbatim as a separate file rather than regenerated, so it shows exactly
+what shipped before `AE_CACHE`/`PIPELINE` existed as settings. It is a fixed
+historical artifact — regenerating `knee-braft.svg` from a new sweep never touches
+it, and it should not be treated as reproducible from the current CSV.
