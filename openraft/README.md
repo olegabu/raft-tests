@@ -69,7 +69,7 @@ deploy && make env`), and both binaries built locally (see Build above).
 make push           # scp the server binary, init-cluster.sh, loadgen to all instances
 make start          # start one raft-key-value process per node
 make init-cluster   # one-time: form the 3-node cluster (skip on subsequent restarts)
-make client         # run the load generator on the C&C instance
+make client RATE=60000    # open loop at 60k req/s (the default mode)
 make logs           # tail the first node's std.log
 make stop           # kill the servers
 ```
@@ -126,7 +126,7 @@ not a cumulative average.
 | `VALUE_SIZE` | `client` | `64` | loadgen `--value_size` |
 | `KEY` | `client` | `bench` | loadgen `--key` |
 | `LOG_EACH_REQUEST` | `client` | `false` | set to `true` to pass `--log_each_request` |
-| `MODE` | `client` | `closed` | `closed` keeps `THREADS` outstanding; `open` emits at `RATE` on a fixed schedule and measures from each request's scheduled send time. See [root README](../README.md#load-modes) |
+| `MODE` | `client` | `open` | `open` (the default) emits at `RATE` on a fixed schedule and measures from each request's scheduled send time; it requires `RATE`. `closed` keeps `THREADS` outstanding instead and cannot show the knee. See [root README](../README.md#load-modes) |
 | `RATE` | `client` | — | requests/sec, required when `MODE=open` |
 | `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
 | `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
@@ -137,9 +137,10 @@ not a cumulative average.
 | `HDR_OUT` | `client` | unset | write a percentile report to this path |
 
 ```sh
-make client                         # 100 outstanding requests, the default
-make client THREADS=32              # override; WORKER_THREADS follows automatically
-make client CAS_PERCENTAGE=100 KEY=counter   # exercise the read+CAS increment path
+make client RATE=60000                       # open loop, the default mode
+make client MODE=closed                      # 100 outstanding requests instead
+make client MODE=closed THREADS=32           # override; WORKER_THREADS follows automatically
+make client RATE=60000 CAS_PERCENTAGE=100 KEY=counter   # exercise the read+CAS increment path
 ```
 
 `raft-kv-memstore` is a fixed in-memory example — it doesn't expose any

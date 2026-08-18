@@ -6,9 +6,15 @@ include ../common.mk
 
 PORT     ?= 8300
 SYNC     ?= false
-# MODE=closed holds THREADS requests outstanding; MODE=open emits at RATE req/s
-# on a fixed schedule and measures from each request's scheduled send time.
-MODE     ?= closed
+# MODE=open (the default) emits at RATE on a fixed schedule and measures each
+# request from its *scheduled* send time, so time spent waiting to send is charged
+# to the system -- the rule that makes it immune to coordinated omission, and the
+# only mode that can show the saturation knee. MODE=closed holds THREADS requests
+# outstanding instead; it measures the service latency one well-behaved client
+# sees and by construction cannot see the knee. Open needs RATE; there is no
+# default offered rate, because silently picking one would put a number in the
+# results that nobody chose.
+MODE     ?= open
 THREADS  ?= 100
 RATE     ?=
 BURST    ?= 1
@@ -108,6 +114,8 @@ stop:
 
 ## Run the load generator from the client box (override THREADS=n)
 client:
+	@if [ "$(MODE)" = "open" ] && [ -z "$(strip $(RATE))" ]; then \
+		echo "MODE=open requires RATE, e.g. make client RATE=100000  (MODE=closed needs no rate)" >&2; exit 1; fi
 	ssh -t $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
 		"cd $(CLIENT_DIR) && ./run_client.sh --peers '$(PEERS)' \
 			--mode $(MODE) --pace $(PACE) \

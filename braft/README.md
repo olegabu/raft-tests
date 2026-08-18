@@ -74,7 +74,7 @@ deploy && make env`), and the binaries built locally (see Build above).
 ```sh
 make push          # scp binaries and run scripts to all instances
 make start         # start one atomic_server per node, peered over private IPs
-make client        # run the load generator on the C&C instance
+make client RATE=100000   # open loop at 100k req/s (the default mode)
 make logs          # tail the first node's std.log
 make stop          # kill the servers
 ```
@@ -100,7 +100,7 @@ Config comes from the shared `../.env` (see root `.env.example`); the flags belo
 | `SERVER_CONCURRENCY` | `start` | `18` | `-bthread_concurrency` on the nodes, against brpc's default of 9. Nominally over-provisioned for 8 vCPUs, but matching it to the core count measures worse |
 | `THREADS` | `client` | `100` | `-thread_num`; concurrent sending threads on the load generator. All three products in this repo default to 100 outstanding requests so their numbers are directly comparable |
 | `CLIENT_CONCURRENCY` | `client` | `$(THREADS)` | `-bthread_concurrency` on the client; kept equal to `THREADS` by default so sending threads never queue for fewer real workers than they need — which would inflate measured latency with client-side scheduling delay rather than the cluster's own latency. Set explicitly to reintroduce that mismatch on purpose |
-| `MODE` | `client` | `closed` | `closed` keeps `THREADS` outstanding; `open` emits at `RATE` on a fixed schedule and measures from each request's scheduled send time. See [root README](../README.md#load-modes) |
+| `MODE` | `client` | `open` | `open` (the default) emits at `RATE` on a fixed schedule and measures from each request's scheduled send time; it requires `RATE`. `closed` keeps `THREADS` outstanding instead and cannot show the knee. See [root README](../README.md#load-modes) |
 | `RATE` | `client` | — | requests/sec, required when `MODE=open` |
 | `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
 | `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
@@ -115,8 +115,9 @@ Examples:
 ```sh
 make start PIPELINE=8              # more AppendEntries pipelining per follower
 make start SYNC=true PIPELINE=8    # fsync + more pipelining
-make client                        # 100 outstanding requests, the default
-make client THREADS=32             # override; CLIENT_CONCURRENCY follows automatically
+make client RATE=100000            # open loop, the default mode
+make client MODE=closed            # 100 outstanding requests instead
+make client MODE=closed THREADS=32 # override; CLIENT_CONCURRENCY follows automatically
 ```
 
 ### Multi-AZ: designating a starting leader
@@ -126,7 +127,7 @@ After `make deploy TOPOLOGY=multi_az` from the repo root (see root README),
 
 ```sh
 make transfer-leader            # designate NODE1 as the starting leader
-make client
+make client RATE=100000
 ```
 
 `make transfer-leader` forces `NODE1` to be the starting leader (needs

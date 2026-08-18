@@ -150,16 +150,21 @@ numbers are two views of the same measurement.
 
 ## Load modes
 
-Every product's `make client` takes `MODE=closed` (default) or `MODE=open`.
-They answer different questions and neither substitutes for the other.
+Every product's `make client` takes `MODE=open` (the default) or `MODE=closed`.
+They answer different questions and neither substitutes for the other. Open is the
+default because it is the one that can be wrong in the safe direction: it finds the
+knee and cannot hide a queue, whereas a closed-loop number quietly flatters a
+saturated system. It has no default `RATE` — picking one silently would put an
+offered rate in the results that nobody chose — so `make client` without `RATE`
+fails immediately with a message rather than after an ssh round trip.
 
-**`MODE=closed THREADS=N`** keeps N requests outstanding, so offered load adapts
+**`MODE=closed THREADS=N`** (opt in) keeps N requests outstanding, so offered load adapts
 to how fast the cluster answers. It measures the service latency one
 well-behaved client experiences. By construction it *cannot* see saturation:
 past the knee it simply stops offering more load, so latency flattens and
 throughput caps. Publishing only closed-loop numbers overstates resilience.
 
-**`MODE=open RATE=R`** emits on a fixed schedule at R requests/sec whether or
+**`MODE=open RATE=R`** (default) emits on a fixed schedule at R requests/sec whether or
 not replies have arrived, because real arrivals do not slow down when the system
 does — they often increase. Latency is measured from each request's **scheduled**
 send time, not the moment it actually went out, so any time spent waiting to
