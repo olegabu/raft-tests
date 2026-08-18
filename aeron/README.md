@@ -104,7 +104,7 @@ make env`), and `make build` run locally.
 make provision      # one-time per fleet: install a JDK (the AMI ships none)
 make push           # scp libs/ to all instances
 make start          # one EchoServiceNode per node; membership is static
-make client RATE=400000   # open loop at 400k msg/s (the default mode)
+make client        # open loop at the default 100k msg/s
 make logs           # tail the first node's std.log
 make stop           # kill the nodes
 ```
@@ -153,7 +153,7 @@ differs.
 | `VALUE_SIZE` | `client` | `64` | loadgen `--value_size` |
 | `LOG_EACH_REQUEST` | `client` | `false` | set to `true` to pass `--log_each_request` |
 | `MODE` | `client` | `open` | `open` (the default) emits at `RATE` on a fixed schedule and measures from each request's scheduled send time; it requires `RATE`. `closed` keeps `THREADS` outstanding instead and cannot show the knee. See [root README](../README.md#load-modes) |
-| `RATE` | `client` | — | requests/sec, required when `MODE=open` |
+| `RATE` | `client` | `100000` | messages/sec offered in open mode. 100k is a quarter of aeron's ~400k comfort zone, so the default run is well inside it |
 | `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
 | `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
 | `WARMUP` | `client` | `10` | seconds discarded before measuring |
@@ -168,7 +168,7 @@ differs.
 | `APPOINTED_LEADER` | `start` | `0` | member id pinned as leader; empty to elect normally |
 
 ```sh
-make client RATE=400000            # open loop, the default mode
+make client RATE=400000            # open loop at aeron's comfort-zone rate
 make client MODE=closed            # 100 outstanding requests instead
 make client MODE=closed THREADS=32 # override
 ```

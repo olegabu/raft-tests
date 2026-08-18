@@ -74,7 +74,7 @@ deploy && make env`), and the binaries built locally (see Build above).
 ```sh
 make push          # scp binaries and run scripts to all instances
 make start         # start one atomic_server per node, peered over private IPs
-make client RATE=100000   # open loop at 100k req/s (the default mode)
+make client        # open loop at the default 100k req/s
 make logs          # tail the first node's std.log
 make stop          # kill the servers
 ```
@@ -101,7 +101,7 @@ Config comes from the shared `../.env` (see root `.env.example`); the flags belo
 | `THREADS` | `client` | `100` | `-thread_num`; concurrent sending threads on the load generator. All three products in this repo default to 100 outstanding requests so their numbers are directly comparable |
 | `CLIENT_CONCURRENCY` | `client` | `$(THREADS)` | `-bthread_concurrency` on the client; kept equal to `THREADS` by default so sending threads never queue for fewer real workers than they need — which would inflate measured latency with client-side scheduling delay rather than the cluster's own latency. Set explicitly to reintroduce that mismatch on purpose |
 | `MODE` | `client` | `open` | `open` (the default) emits at `RATE` on a fixed schedule and measures from each request's scheduled send time; it requires `RATE`. `closed` keeps `THREADS` outstanding instead and cannot show the knee. See [root README](../README.md#load-modes) |
-| `RATE` | `client` | — | requests/sec, required when `MODE=open` |
+| `RATE` | `client` | `100000` | requests/sec offered in open mode. 100k is inside braft's ~150k comfort zone |
 | `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
 | `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
 | `WARMUP` | `client` | `10` | seconds discarded before measuring |
@@ -115,7 +115,7 @@ Examples:
 ```sh
 make start PIPELINE=8              # more AppendEntries pipelining per follower
 make start SYNC=true PIPELINE=8    # fsync + more pipelining
-make client RATE=100000            # open loop, the default mode
+make client                        # open loop at the default 100k req/s
 make client MODE=closed            # 100 outstanding requests instead
 make client MODE=closed THREADS=32 # override; CLIENT_CONCURRENCY follows automatically
 ```
@@ -127,7 +127,7 @@ After `make deploy TOPOLOGY=multi_az` from the repo root (see root README),
 
 ```sh
 make transfer-leader            # designate NODE1 as the starting leader
-make client RATE=100000
+make client
 ```
 
 `make transfer-leader` forces `NODE1` to be the starting leader (needs

@@ -69,7 +69,7 @@ deploy && make env`), and both binaries built locally (see Build above).
 make push           # scp the server binary, init-cluster.sh, loadgen to all instances
 make start          # start one raft-key-value process per node
 make init-cluster   # one-time: form the 3-node cluster (skip on subsequent restarts)
-make client RATE=60000    # open loop at 60k req/s (the default mode)
+make client RATE=60000    # open loop; 60k, since the 100k default is past openraft's knee
 make logs           # tail the first node's std.log
 make stop           # kill the servers
 ```
@@ -127,7 +127,7 @@ not a cumulative average.
 | `KEY` | `client` | `bench` | loadgen `--key` |
 | `LOG_EACH_REQUEST` | `client` | `false` | set to `true` to pass `--log_each_request` |
 | `MODE` | `client` | `open` | `open` (the default) emits at `RATE` on a fixed schedule and measures from each request's scheduled send time; it requires `RATE`. `closed` keeps `THREADS` outstanding instead and cannot show the knee. See [root README](../README.md#load-modes) |
-| `RATE` | `client` | — | requests/sec, required when `MODE=open` |
+| `RATE` | `client` | `100000` | requests/sec offered in open mode. Note 100k is *past* openraft's ~85k comfort zone, so the default run is a saturated one; use `RATE=60000` for a healthy point |
 | `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
 | `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
 | `WARMUP` | `client` | `10` | seconds discarded before measuring |
@@ -137,7 +137,7 @@ not a cumulative average.
 | `HDR_OUT` | `client` | unset | write a percentile report to this path |
 
 ```sh
-make client RATE=60000                       # open loop, the default mode
+make client RATE=60000                       # open loop below openraft's ~85k knee
 make client MODE=closed                      # 100 outstanding requests instead
 make client MODE=closed THREADS=32           # override; WORKER_THREADS follows automatically
 make client RATE=60000 CAS_PERCENTAGE=100 KEY=counter   # exercise the read+CAS increment path

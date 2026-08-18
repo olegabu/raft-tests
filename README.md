@@ -154,9 +154,14 @@ Every product's `make client` takes `MODE=open` (the default) or `MODE=closed`.
 They answer different questions and neither substitutes for the other. Open is the
 default because it is the one that can be wrong in the safe direction: it finds the
 knee and cannot hide a queue, whereas a closed-loop number quietly flatters a
-saturated system. It has no default `RATE` — picking one silently would put an
-offered rate in the results that nobody chose — so `make client` without `RATE`
-fails immediately with a message rather than after an ssh round trip.
+saturated system.
+
+`RATE` defaults to **100k** for all three products, so a bare `make client` offers
+the same load everywhere and the three are directly comparable. That single number
+sits in a different place on each curve, though — inside braft's comfort zone
+(~150k), past openraft's (~85k), and at a quarter of aeron's (~400k) — so a result
+is only meaningful next to the rate it came from. Every run prints its offered rate
+in the summary; quote it.
 
 **`MODE=closed THREADS=N`** (opt in) keeps N requests outstanding, so offered load adapts
 to how fast the cluster answers. It measures the service latency one

@@ -13,12 +13,14 @@ PORT_BASE ?= 9000
 # to the system -- the rule that makes it immune to coordinated omission, and the
 # only mode that can show the saturation knee. MODE=closed holds THREADS requests
 # outstanding instead; it measures the service latency one well-behaved client
-# sees and by construction cannot see the knee. Open needs RATE; there is no
-# default offered rate, because silently picking one would put a number in the
-# results that nobody chose.
+# sees and by construction cannot see the knee. RATE defaults to 100k, which is
+# the same offered rate for all three products so their runs are directly
+# comparable -- but it sits differently against each one's comfort zone (braft
+# ~150k, openraft ~85k, aeron ~400k), so always report the rate a result came
+# from rather than leaving it implied.
 MODE       ?= open
 THREADS    ?= 100
-RATE       ?=
+RATE       ?= 100000
 BURST      ?= 1
 MAX_INFLIGHT ?=
 VALUE_SIZE ?= 64
@@ -172,8 +174,6 @@ stop:
 ## it is resolved on the client itself rather than taken from .env (which
 ## carries the client's public IP, not the private one nodes can reach).
 client:
-	@if [ "$(MODE)" = "open" ] && [ -z "$(strip $(RATE))" ]; then \
-		echo "MODE=open requires RATE, e.g. make client RATE=100000  (MODE=closed needs no rate)" >&2; exit 1; fi
 	ssh -n $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "$(KILL_CLIENT)"
 	ssh -t $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
 		"cd $(CLIENT_DIR) && java -cp 'libs/*' $(AERON_OPENS) \
