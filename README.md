@@ -10,6 +10,209 @@ instructions in its own README:
 
 The AWS harness below is shared across all of them.
 
+## Why this repo exists
+
+<!-- Pairs of drafts below throughout this section: pick one from each pair,
+     delete the other, and delete these HTML-comment markers when done. -->
+
+**Why raft at all — detailed:**
+
+A financial system like a sequencer, an exchange, or a ledger needs a single,
+durable, correctly-ordered log of truth — two nodes disagreeing about what
+happened, or an acknowledged write vanishing because the one machine holding it
+died, is not a bug you patch around later. A single machine is a single point
+of failure, and in the cloud that failure is not hypothetical: instances get
+reclaimed, AZs go down, networks partition. Consensus protocols like raft exist
+for exactly this — they replicate the log to a majority of nodes and only
+acknowledge a write once that majority has durably recorded it, with a proven
+election mechanism that stops two nodes from both believing they're in charge
+and guarantees no acknowledged write is lost as long as a majority survives.
+That is what the requirements below actually need, which is why this project
+benchmarks raft implementations specifically rather than a single database
+instance with best-effort async replication.
+
+**Why raft at all — brief:**
+
+A financial system's log of truth can't safely live on one machine — that
+machine is a single point of failure, and in the cloud, hardware and AZ
+failures are routine, not hypothetical. Raft replicates that log to a
+majority of nodes and only acknowledges a write once it's durably committed
+there, with no split-brain and no lost acknowledgment as long as a majority
+survives — exactly the guarantee a sequencer, exchange, or ledger needs.
+
+**Brief:**
+
+These tests ask whether a given raft implementation is suitable as the
+replicated log and state machine behind a financial-services system deployed
+in the cloud — a sequencer, an exchange's matching engine, a general ledger.
+That sets three requirements this repo measures against: an input must be
+safely replicated before it's acknowledged to the client, the system must
+survive losing an availability zone and keep operating (RTO/RPO), and it must
+survive a rapid spike in volume without the tail detaching from the median
+(p99/p50).
+
+**Detailed:**
+
+The question behind these tests is not "how fast is X" in the abstract — it's
+whether a given raft implementation is suitable as the replicated log and state
+machine behind a financial-services system deployed in the cloud: a sequencer,
+an exchange's matching engine, a general ledger. That framing is narrower than
+"benchmark raft" and it sets three concrete requirements, each of which shapes
+what gets measured here rather than being a nice-to-have:
+
+1. **An input is safely replicated before it is acknowledged to the client.**
+   "Accepted" and "durable" are not the same event, and the client is only told
+   the former if the system lied. This is why every load generator here measures
+   from the request that returns only after the raft group has committed and
+   applied it, not from a local accept — see [Load modes](#load-modes) for the
+   measurement rule, and
+   [dropped-by-rig](#dropped-by-rig-what-it-is-and-whether-it-matters-in-production)
+   for why a request the rig never got to send is a different failure from one
+   the cluster failed to durably record.
+2. **The system survives losing an availability zone and keeps operating** — in
+   RTO/RPO terms, a bounded time to resume serving and zero acknowledged writes
+   lost. This is why multi-AZ is this repo's default topology rather than an
+   option (see [Topology](#topology-single-az-vs-multi-az)): a raft group whose
+   voters share one AZ cannot make this claim regardless of how it benchmarks.
+   That said, **RTO/RPO are not yet directly measured here.** The closest thing
+   today is the leader-stall check under [Load modes](#load-modes), which
+   verifies the *rig's* handling of a 500 ms pause, not a full AZ loss, election,
+   and resumption. Recording that gap here rather than implying it's covered.
+3. **The system survives a rapid spike in volume without the tail blowing out.**
+   Financial workloads are bursty by construction — opens, closes, news — so the
+   relevant question is not peak throughput but how latency behaves as offered
+   load rises toward and past capacity, and specifically how far the tail
+   detaches from the median under load. That is measured here as the p99/p50
+   ratio rather than an absolute latency figure, because a ratio means the same
+   thing regardless of how fast the underlying system is and cannot be satisfied
+   by simply being slow. The [comfort-zone](#comfort-zones) methodology and the
+   knee charts throughout this README exist to find the highest offered rate at
+   which that ratio still holds.
+
+### Why these three implementations
+
+Three languages, chosen for where they actually show up in this space:
+**C++** (braft, via brpc), because a large share of existing low-latency
+financial-systems code is C++; **Java** (Aeron Cluster), because Aeron is a
+widely used low-latency messaging library and Aeron Cluster is its raft
+implementation; and **Rust** (openraft), for Rust's rising adoption in the
+same space.
+
+For the replicated state machine, each product runs the simplest example
+that ships with it — braft's atomic counter, openraft's key-value store,
+Aeron's echo service — rather than one custom state machine reimplemented
+identically across all three. That rests on an assumption: that these state
+machines' own cost is negligible next to consensus, and similar enough across
+products not to bias the comparison. A shared, identical-logic state machine
+per product would test that assumption directly, and is not expected to
+change the results much, but hasn't been built — the goal here is a practical
+answer to "which of these is fast enough for this job," not academic rigor.
+The more rigorous version remains possible; it's just not what this repo
+optimizes for.
+
+Each product's load generator is written in that product's own language and
+built to follow the same client call pattern its own shipped example uses,
+rather than a generic driver bolted on from outside. They are still three
+independent codebases, but they implement one shared design: the same load
+shapes (open/closed loop, burst, warmup/measure windows), the same
+measurement rule (latency from scheduled send time in open loop), and output
+into HdrHistograms in the same format — so what comes out the other end is
+one comparable dataset, not three different things sharing a name. See
+[Load modes](#load-modes) for that shared design in detail.
+
+### The knee, and why the tail matters more than the median
+
+"The knee" is the offered rate at which a system stops absorbing load at
+roughly constant latency and starts falling behind it — the boundary between
+"comfortably serving this rate" and "a backlog is forming that grows every
+second this continues." Below it, latency describes service time. Above it,
+latency describes queue depth, and it keeps growing for as long as the
+overload lasts, not just while a burst is happening. Finding that boundary
+precisely, not just confirming the system is "fast," is the actual point of
+this repo — see [The knee, and why it only shows up in open loop](#the-knee-and-why-it-only-shows-up-in-open-loop)
+for the mechanics of how it's measured.
+
+For a financial system this matters more than it would for most software,
+because load there is not steady. Volume concentrates at the open, the close,
+around news — the moments that matter most commercially are exactly the
+moments furthest from the average the system was sized against. A capacity
+number with no knee attached to it — "handles 50k req/s" with no statement of
+what happens at 80k — says nothing about whether the system survives its own
+busiest ten seconds. The knee is the number that answers that question: how
+much headroom actually exists above the load you expect, before behavior
+changes qualitatively rather than just gradually.
+
+That's also why this repo treats the tail — and specifically the p99/p50
+ratio, not either number alone — as more important than median latency, maybe
+the single most important number here. Two reasons. First, fairness: a
+sequencer or exchange can't tell one participant in a thousand "you got the
+slow path today"; the median describes the typical request, but a matching
+engine or ledger has to answer for every request, including the unlucky ones,
+and it's the tail that describes those. Second, and more practically: the
+tail is the early-warning signal. Throughout this repo's own data, p99 departs
+from p50 well before p50 itself moves — braft's p99 is already 2-3x its own
+floor while p50 has barely shifted (see [Comfort zones](#comfort-zones)). A
+monitoring setup watching only the median would see nothing until the knee
+was already close; watching the ratio catches the approach instead of the
+arrival.
+
+### Findings, briefly
+
+Before the methodology and the full results: the short version, for a reader
+who wants the answer before the derivation.
+
+![p50 latency vs offered rate for braft, openraft and Aeron Cluster, each flat then kneeing upward](knee-curves.svg)
+
+**Aeron wins, and it isn't close.**[[graph]](#aeron--flat-to-400k-then-a-step-up-at-460k) Its comfort zone runs to ~400k req/s at
+537/705 µs (p50/p99, a ~1.3x ratio) on this repo's fleet — multi-AZ,
+`c6i.2xlarge` instances, nothing exotic. That is consistent with what Aeron's
+own vendor publishes: AWS's 2025 Aeron-on-AWS benchmark reports Aeron Cluster
+(open source) at 95/136 µs (p50/p99) at 100k msg/s, single-AZ, on much larger
+network-optimized `c6in.16xlarge` instances.[^aeron-aws] The gap between that
+and our own 487/626 µs at the same 100k offered rate is almost exactly this
+repo's own measured cross-AZ quorum round trip (387-451 µs, see
+[What `make node-rtt` actually measures](#what-make-node-rtt-actually-measures))
+— the difference is the AZ hop, not the software. And the same benchmark[^aeron-aws]
+shows Aeron OSS has its own real knee under enough load: at 1M msg/s its p50
+balloons to 3,301 µs. Same shape we found, just further out and on different
+hardware — which is itself a useful cross-check that this
+repo's methodology is measuring something real.
+
+**braft is comfortably within a financial system's load requirements.**[[graph]](#braft--flat-to-160k-then-both-percentiles-go-together)
+Its comfort zone runs to ~160k req/s, and both p50 *and* p99 stay under 1 ms
+through 100k req/s (748/984 µs) — a materially different regime from "fast in
+isolation," since it holds under sustained, fully-placed load with drops at
+the rig's fixed startup cost and nothing else.
+
+**openraft's tail doesn't detach the way the other two's do, but its
+overall numbers are too low for this to matter much.**[[graph]](#openraft--gradual-no-cliff) Its p99/p50 ratio
+never spikes past ~3x anywhere in the measured range — no sudden blowout, just
+the whole distribution shifting together as load rises, because latency grows
+close to linearly with offered rate rather than staying flat and then
+breaking. That also means it has no sharp knee to find: there's no plateau to
+fall off of, just a slope. It caps out around 128k req/s with a p50 already
+past 2.7 ms there, well below what the other two sustain at similar or higher
+rates. Pinning down *why* the curve is linear is open to further
+investigation, but a lower priority than it might otherwise be — the
+baseline numbers put it out of contention for this use case regardless of how
+its tail behaves.
+
+**Put together: most of the latency budget is simply the network, and both
+of the two credible options prove the approach works.** The cross-AZ RTT in
+us-east-1 — roughly half a millisecond — accounts for most of braft's latency
+floor and a fixed cost aeron and openraft pay too; none of it is protocol
+inefficiency. What's left is genuinely encouraging: braft holding six figures
+of throughput under 1 ms, and aeron holding four times that with an even
+tighter tail, both demonstrate that a raft-replicated, cross-AZ financial
+system with predictable latency and a tight tail is buildable on commodity
+cloud infrastructure — this was not obvious going in. That leaves a choice
+between aeron and braft to be made on other grounds: language expertise,
+existing libraries (an existing matching-engine core, say), and the
+discipline required either way — allocation-free, GC-free Java with Aeron
+Cluster, or C++ with braft. Both are real options; neither is a compromise.
+
+[^aeron-aws]: [Aeron on AWS: 2025 Performance Benchmark Results](https://aws.amazon.com/blogs/industries/aeron-on-aws-2025-performance-benchmark-results/) — AWS Industries blog. Single-AZ, `c6in.16xlarge`, Aeron Cluster open-source edition.
+
 ## AWS harness
 
 Provisions a small EC2 fleet — 3 raft nodes + 1 command-and-control instance
@@ -123,31 +326,6 @@ override it with `-var <name>=<port>` on `terraform apply` to match. Adding
 a new product with its own port follows the same pattern — a new variable
 plus a matching ingress rule.
 
-## Adding a new raft product
-
-1. Create a new subdirectory with your build files and a `Makefile` that
-   does `-include ../.env` and `include ../common.mk` (for `SSH_USER`,
-   `SSH_KEY`, `SSH_OPTS`, `NODES`).
-2. Add product-specific targets there: `push` (scp binaries), `start`/`stop`
-   (run the server), `client` (run your load generator), `logs`. The three
-   existing Makefiles cover fairly different shapes, so one of them is
-   probably close to what you need:
-   - `braft/Makefile` — one TCP port per node, static peer config
-   - `openraft/Makefile` — two TCP ports per node, membership configured at
-     runtime via an extra `init-cluster` step
-   - `aeron/Makefile` — a 100-port UDP block per node, static membership, and
-     a `provision` target because it needs a JVM installed on the instances
-3. Deploy/tear down the shared fleet from the repo root as above; run your
-   product's own targets from its subdirectory.
-
-Keep the reporting line in the same shape the existing three use
-(`... at qps=<X> latency=<Y>` in microseconds, over a one-second rolling
-window), support both load modes (below), and default `THREADS` to 100 as they
-all do, so results can be read side by side. 100 outstanding requests is the
-common comparison point for closed mode: every product is latency-bound there
-rather than resource bound, so `qps ≈ THREADS ÷ latency` holds and the two
-numbers are two views of the same measurement.
-
 ## Load modes
 
 Every product's `make client` takes `MODE=open` (the default) or `MODE=closed`.
@@ -183,6 +361,24 @@ instant — same mean rate, clustered arrivals, for probing burst absorption),
 *dropped-by-rig* and a nonzero count invalidates the run's offered-rate claim
 rather than being silently skipped), `WARMUP`/`MEASURE`/`DRAIN_TIMEOUT`, `PACE`
 (`spin` for a client with a spare core, `park` on a shared box), and `HDR_OUT`.
+
+These ten `make client` flags are named identically and mean the same thing in
+every product's own Makefile — this is the single reference for them; each
+product's own README documents only what's specific to it:
+
+| Flag | Default | Effect |
+|---|---|---|
+| `MODE` | `open` | `open` emits at `RATE` on a fixed schedule, measured from scheduled send time; `closed` keeps `THREADS` outstanding instead and cannot show the knee |
+| `RATE` | `100000` | Requests/sec offered in open mode; required when `MODE=open` |
+| `THREADS` | `100` | Concurrent sending threads (closed mode) / outstanding-request budget (open mode). All three products default to 100 so results are directly comparable |
+| `BURST` | `1` | Requests per scheduled instant in open mode; same mean rate, clustered arrivals |
+| `MAX_INFLIGHT` | derived | Cap on unanswered requests in open mode; hitting it counts as dropped-by-rig |
+| `WARMUP` | `10` | Seconds discarded before measuring |
+| `MEASURE` | `30` | Seconds recorded |
+| `DRAIN_TIMEOUT` | `10` | Seconds to wait for in-flight replies after the measurement window closes |
+| `PACE` | `spin` | Open-mode wait strategy: `spin` with a spare core, `park` on a shared box |
+| `HDR_OUT` | unset | Write a percentile report to this path |
+
 
 Each run ends with a summary carrying p50/p90/p99/p99.9/p99.99/max from an
 HdrHistogram, achieved rate, dropped-by-rig, and — in open mode — **schedule
@@ -359,6 +555,11 @@ depend on arrival *pattern*; the EC2 configuration sets non-parking strategies
 
 ### The knee, and why it only shows up in open loop
 
+For *why* finding this matters — especially for a financial system —
+see [Why this repo exists](#the-knee-and-why-the-tail-matters-more-than-the-median).
+This section covers the mechanics only: why open loop reveals it and
+closed loop cannot.
+
 Every system has a rate below which it keeps up comfortably and above which it
 stops. The **knee** is that transition. Below it, a request's latency is service
 time: it arrives, gets processed, leaves. Above it, requests arrive faster than
@@ -383,9 +584,9 @@ system's own speed — at saturation it simply stops asking for more, latency
 flattens, and throughput caps. That is coordinated omission as a property of the
 measurement, and it is why the cliff below is only visible in open loop.
 
-![p50 latency vs offered rate for braft, openraft and Aeron Cluster, each flat then kneeing upward](knee-curves.svg)
-
-One pair of axes for all three has to span a 16× range of offered rate, which
+The combined chart for all three products is in
+[Findings, briefly](#findings-briefly), above — one pair of axes for all three
+has to span a 16× range of offered rate, which
 squeezes braft and openraft into the left fifth of the plot and flattens the very
 thing the chart is for. So each product also gets its own, over its own range of
 rate and latency, with p50 and p99 plotted together — the tail turns first, so the
@@ -545,9 +746,13 @@ carried. "braft sustained 100k with a 3.1 ms p99" is a false claim if 1.5% of th
 100k was never sent — the system was really asked for 98.5k, and the tail looks
 good precisely because the hardest requests were the ones discarded. So drops are
 fine as a client design and fatal as a benchmark result, which is why the comfort
-criterion above bounds them at 0.1% rather than ignoring them.
+criterion below bounds them at 0.1% rather than ignoring them.
 
-### Comfort zones
+Everything above is the measurement rig. What it found — the comfort
+zone and full per-product tables — is its own section, next:
+[Comfort zones](#comfort-zones).
+
+## Comfort zones
 
 Comfort zone here means the highest offered rate such that **every rate up to and
 including it** satisfies all three of:
@@ -640,7 +845,9 @@ paying for it in latency. openraft is the exception: it gains 523 µs, or
 38%, going from 85k to 10k, but that is not a floor being approached, it is the
 near-linear cost curve described below extended down.
 
-#### aeron — flat to 400k, then a step up at 460k
+### aeron — flat to 400k, then a step up at 460k
+
+![aeron: p50 and p99 flat from 25k all the way to 400k, then a single step up after 460k](knee-aeron.svg)
 
 | offered | achieved | p50 | p99 | dropped | of offered |
 |---|---|---|---|---|---|
@@ -673,7 +880,9 @@ revision of this file explained the 100k row's count as JIT warmup because it ra
 first in its sweep; the low-rate points refute that, since 25k also ran first in
 its own sweep and dropped 7.)
 
-#### braft — flat to 160k, then both percentiles go together
+### braft — flat to 160k, then both percentiles go together
+
+![braft: p50 and p99 flat together through the comfort zone to 160k, both breaking as one at the knee near 165k](knee-braft.svg)
 
 | offered | achieved | p50 | p99 | p99/p50 | dropped | of offered |
 |---|---|---|---|---|---|---|
@@ -734,7 +943,9 @@ schedule-lag evidence that bounds how much of it could be rig error); it is now
 small enough to sit inside the sweep's own noise rather than being a separate
 finding to chase.
 
-#### openraft — gradual, no cliff
+### openraft — gradual, no cliff
+
+![openraft: p50 and p99 both climb steadily from the lowest rate measured, with no flat stretch and no cliff](knee-openraft.svg)
 
 | offered | achieved | p50 | p99 | dropped | of offered |
 |---|---|---|---|---|---|
@@ -836,3 +1047,29 @@ the cluster" rule already covers client↔node traffic on any port, for UDP as
 well as TCP. The
 `raft_port` variable only matters if you want to open a port to *your own
 laptop* (e.g. for stats pages), which is optional.
+
+## Adding a new raft product
+
+1. Create a new subdirectory with your build files and a `Makefile` that
+   does `-include ../.env` and `include ../common.mk` (for `SSH_USER`,
+   `SSH_KEY`, `SSH_OPTS`, `NODES`).
+2. Add product-specific targets there: `push` (scp binaries), `start`/`stop`
+   (run the server), `client` (run your load generator), `logs`. The three
+   existing Makefiles cover fairly different shapes, so one of them is
+   probably close to what you need:
+   - `braft/Makefile` — one TCP port per node, static peer config
+   - `openraft/Makefile` — two TCP ports per node, membership configured at
+     runtime via an extra `init-cluster` step
+   - `aeron/Makefile` — a 100-port UDP block per node, static membership, and
+     a `provision` target because it needs a JVM installed on the instances
+3. Deploy/tear down the shared fleet from the repo root as above; run your
+   product's own targets from its subdirectory.
+
+Keep the reporting line in the same shape the existing three use
+(`... at qps=<X> latency=<Y>` in microseconds, over a one-second rolling
+window), support both load modes (below), and default `THREADS` to 100 as they
+all do, so results can be read side by side. 100 outstanding requests is the
+common comparison point for closed mode: every product is latency-bound there
+rather than resource bound, so `qps ≈ THREADS ÷ latency` holds and the two
+numbers are two views of the same measurement.
+
