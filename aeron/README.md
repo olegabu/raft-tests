@@ -11,161 +11,32 @@ across raft implementations and documented in the
 [root README](../README.md) — this file only covers what's specific to this
 product.
 
-## No server code here
-
-The cluster node is `io.aeron.samples.cluster.EchoServiceNode` from the
-published `aeron-samples` artifact, run as-is. Its `main()` launches a
-complete single-process node — media driver, archive, and consensus module via
-`ClusteredMediaDriver`, plus a `ClusteredServiceContainer` running the echo
-service — configured by two system properties (`aeron.cluster.tutorial.nodeId`
-and `aeron.cluster.tutorial.hostnames`). Everything Aeron is pulled from Maven
-Central by Gradle; only the load generator under `loadgen/` is ours.
-
-Membership is static: a node's index in the hostnames list is its member id,
-so the cluster forms on its own with no separate initialization step.
-
-## Ports
-
-`ClusterConfig` assigns each member a 100-port block:
-`portBase + (memberId * 100) + offset`, where offsets 1–5 are archive-control,
-client-facing (ingress), member-facing (consensus), log, and transfer. With the
-sample's `portBase` of 9000 a 3-node cluster uses **UDP** 9001–9005,
-9101–9105, and 9201–9205.
-
-These need no security-group changes: the rule that permits all protocols and
-ports between members of the group already covers both node↔node and
-client↔node traffic. Aeron serves no HTTP status page, so unlike the other
-products there is nothing to expose to your own address.
-
-## Two non-obvious requirements
-
-Both are handled by the Makefile; they're documented because hitting either
-without knowing produces a confusing failure.
-
-1. **JVM module flags.** agrona's `ShutdownSignalBarrier` reflects into
-   `jdk.internal.misc.Signal`, which JDK 17+ does not export to unnamed
-   modules. Without
-   `--add-opens java.base/java.util.zip=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED`
-   every process here — node and client alike — dies at startup with
-   `IllegalAccessException`. This is the same set Aeron's own
-   `scripts/run-java` uses.
-2. **An explicit ingress channel.** `aeron-samples`' `ClusterConfig` does not
-   set one, so the consensus module refuses to start with
-   `ClusterException: ERROR - ingressChannel must be specified`. The Makefile
-   passes `-Daeron.cluster.ingress.channel=aeron:udp?term-length=64k`
-   (override with `INGRESS_CHANNEL`).
-
-## Build
-
-```sh
-make build          # or: cd loadgen && ./gradlew build
-```
-
-Requires a JDK 17 or newer (Aeron 1.48 will not run on less). Two toolchain
-traps worth knowing about:
-
-`build` also collects every runtime jar plus the loadgen into `libs/`, which is
-what gets pushed. Nodes and client receive the same directory, so no remote
-host needs Maven Central access.
-
-## Run locally
-
-Three nodes on one host work unmodified — Aeron derives per-member directory
-names, so they don't collide. From a scratch directory (the cluster and archive
-directories are created under the working directory):
-
-```sh
-LIBS=/path/to/aeron/libs
-OPENS="--add-opens java.base/java.util.zip=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED"
-for i in 0 1 2; do
-  java -cp "$LIBS/*" $OPENS -Xms1G -Xmx1G \
-    -Daeron.cluster.ingress.channel='aeron:udp?term-length=64k' \
-    -Daeron.cluster.tutorial.nodeId=$i \
-    -Daeron.cluster.tutorial.hostnames=localhost,localhost,localhost \
-    io.aeron.samples.cluster.EchoServiceNode > n$i.log 2>&1 &
-done
-```
-
-Each log should report `[N] Started Cluster Node on localhost...`. Then:
-
-```sh
-java -cp "$LIBS/*" $OPENS \
-  -Daeron.cluster.ingress.channel='aeron:udp?term-length=64k' \
-  io.raftbench.aeron.Loadgen \
-  --hostnames localhost,localhost,localhost --egress_host localhost --thread_num 4
-```
-
-## Benchmarking on EC2
+## Benchmark on EC2
 
 Prerequisites: the shared fleet deployed from the repo root (`make deploy &&
-make env`), and `make build` run locally.
+make env`), and `make build` run locally — see [Development](#development).
 
 ```sh
-make provision      # one-time per fleet: install a JDK (the AMI ships none)
-make push           # scp libs/ to all instances
-make start          # one EchoServiceNode per node; membership is static
-make client        # open loop at the default 100k msg/s
-make logs           # tail the first node's std.log
-make stop           # kill the nodes
+make build      # build the loadgen and collect libs/ -- see Development
+make provision  # one-time per fleet: install a JDK (the AMI ships none)
+make push       # scp libs/ to all instances
+make start      # one EchoServiceNode per node; membership is static
+make client     # open loop at the default 100k msg/s
+make logs       # tail the first node's std.log
+make stop       # kill the nodes
 ```
 
 `provision` installs the JDK over ssh rather than through `deploy/main.tf`'s
 `user_data`, because changing `user_data` forces instance replacement and would
 destroy a running fleet. It needs re-running whenever the fleet is recreated.
 
-## Load generator
-
-`loadgen/` is a small Java client using `AeronCluster` with an `EgressListener`
-and an embedded media driver. Each message carries an 8-byte correlation id and
-an 8-byte send timestamp; the echo service returns the payload verbatim, so the
-client recovers both to compute latency and match each reply to its request.
-Out-of-order or missing replies are counted and reported rather than quietly
-averaged in.
-
-| Flag | Default | Effect |
-|---|---|---|
-| `--hostnames` | (required) | comma-separated node addresses; index = member id |
-| `--port_base` | `9000` | must match the cluster's port base |
-| `--egress_host` | `localhost` | address the cluster sends replies to — must be reachable *from the nodes*, so on EC2 it has to be the client's own private address, never loopback |
-| `--thread_num` | `1` | outstanding messages in flight (see below) |
-| `--value_size` | `64` | payload bytes; minimum 16 for the id and timestamp |
-| `--log_each_request` | off | print every send and receive |
-
-Reports once a second:
-`Sending Request to AeronCluster (<endpoints>) at qps=<X> latency=<Y>`, where
-latency is the mean round trip in microseconds over that second (a rolling
-window, not a cumulative average).
-
-**What `--thread_num` means here.** An `AeronCluster` session is
-single-threaded by design, so the load generator runs one thread that keeps N
-messages outstanding and polls egress in the same loop, rather than N threads
-each holding one request open. The quantity that is comparable with the other
-load generators in this repo is the number of outstanding requests, which is
-what `--thread_num` sets everywhere; only the mechanism for achieving it
-differs.
-
-## Makefile flags
-
-| Flag | Target | Default | Effect |
-|---|---|---|---|
-| `PORT_BASE` | `client` | `9000` | Cluster port base |
-| `THREADS` | `client` | `100` | loadgen `--thread_num`; outstanding requests. All three products in this repo default to 100 so their numbers are directly comparable |
-| `VALUE_SIZE` | `client` | `64` | loadgen `--value_size` |
-| `LOG_EACH_REQUEST` | `client` | `false` | set to `true` to pass `--log_each_request` |
-| `MODE` | `client` | `open` | `open` (the default) emits at `RATE` on a fixed schedule and measures from each request's scheduled send time; it requires `RATE`. `closed` keeps `THREADS` outstanding instead and cannot show the knee. See [root README](../README.md#load-modes) |
-| `RATE` | `client` | `100000` | messages/sec offered in open mode. 100k is a quarter of aeron's ~400k comfort zone, so the default run is well inside it |
-| `BURST` | `client` | `1` | requests per scheduled instant; same mean rate, clustered arrivals |
-| `MAX_INFLIGHT` | `client` | derived | cap on unanswered requests; hitting it counts as dropped-by-rig |
-| `WARMUP` | `client` | `10` | seconds discarded before measuring |
-| `MEASURE` | `client` | `30` | seconds recorded |
-| `DRAIN_TIMEOUT` | `client` | `10` | seconds to wait for in-flight replies after the window closes |
-| `PACE` | `client` | `spin` | open-mode wait strategy: `spin` when the client has a spare core, `park` on a shared box |
-| `HDR_OUT` | `client` | unset | write a percentile report to this path |
-| `JVM_OPTS` | `start` | `-Xms1G -Xmx1G -XX:+AlwaysPreTouch` | node heap; Aeron's own rig uses 4G |
-| `INGRESS_CHANNEL` | `start`, `client` | `aeron:udp?term-length=64k` | required, see above |
-| `SPIN_IDLE` | `start`, `client` | `org.agrona.concurrent.BusySpinIdleStrategy` | idle strategy for the cluster and driver agents |
-| `ARCHIVE_IDLE` | `start` | `org.agrona.concurrent.YieldingIdleStrategy` | idle strategy for the archive agents |
-| `APPOINTED_LEADER` | `start` | `0` | member id pinned as leader; empty to elect normally |
+Config comes from the shared `../.env` (see root `.env.example`). Ten of the
+`make client` flags (`MODE`, `RATE`, `THREADS`, `BURST`, `MAX_INFLIGHT`,
+`WARMUP`, `MEASURE`, `DRAIN_TIMEOUT`, `PACE`, `HDR_OUT`) are named and behave
+identically across all three products in this repo and are documented once in
+the root README's [Load modes](../README.md#load-modes); the table in
+[Development](#make-flag-reference) below covers only what's specific to
+aeron.
 
 ```sh
 make client RATE=400000            # open loop at aeron's comfort-zone rate
@@ -181,7 +52,41 @@ happened while writing this, producing a slow drift that looked like the cluster
 was at fault. If numbers get worse over a session, check
 `pgrep -cf '[L]oadgen'` on the client first.
 
-## Tuning notes
+### Ports
+
+`ClusterConfig` assigns each member a 100-port block:
+`portBase + (memberId * 100) + offset`, where offsets 1–5 are archive-control,
+client-facing (ingress), member-facing (consensus), log, and transfer. With the
+sample's `portBase` of 9000 a 3-node cluster uses **UDP** 9001–9005,
+9101–9105, and 9201–9205.
+
+These need no security-group changes: the rule that permits all protocols and
+ports between members of the group already covers both node↔node and
+client↔node traffic. Aeron serves no HTTP status page, so unlike the other
+products there is nothing to expose to your own address.
+
+### Load generator behaviour
+
+`loadgen/` is a small Java client using `AeronCluster` with an `EgressListener`
+and an embedded media driver. Each message carries an 8-byte correlation id and
+an 8-byte send timestamp; the echo service returns the payload verbatim, so the
+client recovers both to compute latency and match each reply to its request.
+Out-of-order or missing replies are counted and reported rather than quietly
+averaged in.
+
+Reports once a second:
+`Sending Request to AeronCluster (<endpoints>) at qps=<X> latency=<Y>`, where
+latency is the mean round trip in microseconds over that second (a rolling
+window, not a cumulative average).
+
+**What `--thread_num`/`THREADS` means here.** An `AeronCluster` session is
+single-threaded by design, so the load generator runs one thread that keeps N
+messages outstanding and polls egress in the same loop, rather than N threads
+each holding one request open. The quantity that is comparable with the other
+load generators in this repo is the number of outstanding requests, which is
+what `THREADS` sets everywhere; only the mechanism for achieving it differs.
+
+## Tuning
 
 **Idle strategy is the single biggest factor, and the defaults are slow.**
 Aeron defaults every agent to
@@ -263,16 +168,111 @@ zero for the few seconds Aeron takes to elect a new leader, then recovers on
 its own with one elevated-latency interval as the queued messages drain. No
 client restart or manual step is needed.
 
-## Relationship to Aeron's official benchmarks
+## Development
+
+### No server code here
+
+The cluster node is `io.aeron.samples.cluster.EchoServiceNode` from the
+published `aeron-samples` artifact, run as-is. Its `main()` launches a
+complete single-process node — media driver, archive, and consensus module via
+`ClusteredMediaDriver`, plus a `ClusteredServiceContainer` running the echo
+service — configured by two system properties (`aeron.cluster.tutorial.nodeId`
+and `aeron.cluster.tutorial.hostnames`). Everything Aeron is pulled from Maven
+Central by Gradle; only the load generator under `loadgen/` is ours.
+
+Membership is static: a node's index in the hostnames list is its member id,
+so the cluster forms on its own with no separate initialization step.
+
+### Two non-obvious requirements
+
+Both are handled by the Makefile; they're documented because hitting either
+without knowing produces a confusing failure.
+
+1. **JVM module flags.** agrona's `ShutdownSignalBarrier` reflects into
+   `jdk.internal.misc.Signal`, which JDK 17+ does not export to unnamed
+   modules. Without
+   `--add-opens java.base/java.util.zip=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED`
+   every process here — node and client alike — dies at startup with
+   `IllegalAccessException`. This is the same set Aeron's own
+   `scripts/run-java` uses.
+2. **An explicit ingress channel.** `aeron-samples`' `ClusterConfig` does not
+   set one, so the consensus module refuses to start with
+   `ClusterException: ERROR - ingressChannel must be specified`. The Makefile
+   passes `-Daeron.cluster.ingress.channel=aeron:udp?term-length=64k`
+   (override with `INGRESS_CHANNEL`).
+
+### Building
+
+```sh
+make build          # or: cd loadgen && ./gradlew build
+```
+
+Requires a JDK 17 or newer (Aeron 1.48 will not run on less). `build` also
+collects every runtime jar plus the loadgen into `libs/`, which is what gets
+pushed. Nodes and client receive the same directory, so no remote host needs
+Maven Central access.
+
+### Running locally
+
+Three nodes on one host work unmodified — Aeron derives per-member directory
+names, so they don't collide. From a scratch directory (the cluster and archive
+directories are created under the working directory):
+
+```sh
+LIBS=/path/to/aeron/libs
+OPENS="--add-opens java.base/java.util.zip=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED"
+for i in 0 1 2; do
+  java -cp "$LIBS/*" $OPENS -Xms1G -Xmx1G \
+    -Daeron.cluster.ingress.channel='aeron:udp?term-length=64k' \
+    -Daeron.cluster.tutorial.nodeId=$i \
+    -Daeron.cluster.tutorial.hostnames=localhost,localhost,localhost \
+    io.aeron.samples.cluster.EchoServiceNode > n$i.log 2>&1 &
+done
+```
+
+Each log should report `[N] Started Cluster Node on localhost...`. Then:
+
+```sh
+java -cp "$LIBS/*" $OPENS \
+  -Daeron.cluster.ingress.channel='aeron:udp?term-length=64k' \
+  io.raftbench.aeron.Loadgen \
+  --hostnames localhost,localhost,localhost --egress_host localhost --thread_num 4
+```
+
+### `make` flag reference
+
+Every flag this harness's Makefile exposes that's specific to aeron. Ten more
+— `MODE`, `RATE`, `THREADS`, `BURST`, `MAX_INFLIGHT`, `WARMUP`, `MEASURE`,
+`DRAIN_TIMEOUT`, `PACE`, `HDR_OUT` — are shared verbatim across all three
+products and documented once in the root README's
+[Load modes](../README.md#load-modes).
+
+| Flag | Target | Default | Effect |
+|---|---|---|---|
+| `PORT_BASE` | `client` | `9000` | Cluster port base |
+| `VALUE_SIZE` | `client` | `64` | loadgen `--value_size`; payload bytes, minimum 16 for the id and timestamp |
+| `LOG_EACH_REQUEST` | `client` | `false` | set to `true` to pass `--log_each_request` |
+| `JVM_OPTS` | `start` | `-Xms1G -Xmx1G -XX:+AlwaysPreTouch` | node heap; Aeron's own rig uses 4G |
+| `INGRESS_CHANNEL` | `start`, `client` | `aeron:udp?term-length=64k` | required, see [Two non-obvious requirements](#two-non-obvious-requirements) |
+| `SPIN_IDLE` | `start`, `client` | `org.agrona.concurrent.BusySpinIdleStrategy` | idle strategy for the cluster and driver agents — see [Tuning](#tuning) |
+| `ARCHIVE_IDLE` | `start` | `org.agrona.concurrent.YieldingIdleStrategy` | idle strategy for the archive agents |
+| `APPOINTED_LEADER` | `start` | `0` | member id pinned as leader; empty to elect normally |
+
+### Relationship to Aeron's official benchmarks
 
 [`aeron-io/benchmarks`](https://github.com/aeron-io/benchmarks) has a cluster
-benchmark maintained by the Aeron authors. It is deliberately not used here:
-it is **open-loop and rate-controlled** (drive a fixed message rate, record an
-HdrHistogram), whereas this load generator is **closed-loop** (hold N requests
-outstanding, measure the achieved rate), matching the other products in this
-repo so the three can be read side by side. It also expects around thirty
-environment variables per node, including per-thread CPU pinning, and brings
-its own ssh deployment machinery that would duplicate this repo's harness.
+benchmark maintained by the Aeron authors. It is deliberately not used here: it
+expects around thirty environment variables per node, including per-thread CPU
+pinning, and brings its own ssh deployment machinery that would duplicate this
+repo's harness — and its numbers are not directly comparable regardless, since
+it's tuned and reported on Real Logic's own terms rather than this repo's
+shared cross-product methodology (same load shapes, same measurement rule,
+same HdrHistogram format across braft, openraft and aeron — see
+[Why these three implementations](../README.md#why-these-three-implementations)).
 
 Use it, not this, if you want absolute Aeron numbers comparable to Real Logic's
-published figures — the two measure different things and will not agree.
+own published figures. This repo's own numbers are, however, consistent with
+what Real Logic and AWS publish for Aeron Cluster once the topology difference
+(this repo runs multi-AZ; their published cloud benchmarks run single-AZ) is
+accounted for — see [Findings, briefly](../README.md#findings-briefly) in the
+root README.

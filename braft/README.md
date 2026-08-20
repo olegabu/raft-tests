@@ -1,40 +1,17 @@
-## Install
+# braft — atomic-counter benchmark
 
-Build tools and the vcpkg package manager. Tested with the versions installed by
-default on Ubuntu 22.
+Benchmarks [braft](https://github.com/baidu/braft) (Baidu's raft implementation,
+built on brpc) using its stock atomic-counter example: an int64 compare-exchange
+over a brpc service.
 
-```sh
-sudo apt install cmake g++ ninja-build flex bison pkg-config
-git clone https://github.com/microsoft/vcpkg
-export VCPKG_ROOT='~/workspace/vcpkg'
-export PATH="$VCPKG_ROOT:$PATH"
-```
-
-## Build
-
-```sh
-make build
-```
-
-Builds three binaries as Release — this is a benchmarking repo, so that's the
-default preset, and a debug build would badly distort every latency/throughput
-number below. See [Development](#development) for the raw `cmake` steps this
-wraps, and for how to build a debug binary instead when troubleshooting a
-crash.
-
-| Binary | What it is |
-|---|---|
-| `atomic_server` | The raft node — braft's stock atomic-counter example (int64 compare-exchange over a brpc service), run three times to form the cluster |
-| `atomic_client` | The load generator this repo adds — open- and closed-loop modes, HdrHistogram percentiles; everything under [Benchmark on EC2](#benchmark-on-ec2) below drives this |
-| `test` | A small one-shot CLI (`--atomic_op=get\|set\|cas`) for poking a running cluster by hand — not used by the benchmark itself, useful for sanity-checking a deploy |
+The AWS harness (terraform, topology, instance types, `.env` setup) is shared
+across raft implementations and documented in the [root README](../README.md) —
+this file only covers what's specific to this product.
 
 ## Benchmark on EC2
 
 Measures the latency and throughput floor of a real 3-node cluster: 3 raft
-nodes plus one command-and-control instance running the client. The AWS
-harness (terraform, topology, instance types, `.env` setup) is shared across
-raft implementations and documented in the [root README](../README.md) — this
-section only covers what's specific to this atomic-counter example.
+nodes plus one command-and-control instance running the client.
 
 The benchmark runs with `-raft_sync=false` (the `run_server.sh` default), so
 log writes go to the page cache and the floor is bound by network round trips,
@@ -44,23 +21,27 @@ at high qps). To test `-sync=true`, switch nodes to `c6id.2xlarge` (see root
 README's "Instance types").
 
 Prerequisites: the shared fleet already deployed from the repo root (`make
-deploy && make env`), and the binaries built locally (see Build above).
+deploy && make env`), and the binaries built locally — see
+[Development](#development).
 
 ```sh
-make push          # scp binaries and run scripts to all instances
-make start         # start one atomic_server per node, peered over private IPs
-make client        # open loop at the default 100k req/s
-make logs          # tail the first node's std.log
-make stop          # kill the servers
+make build   # build atomic_server, atomic_client, test -- see Development
+make push    # scp binaries and run scripts to all instances
+make start   # start one atomic_server per node, peered over private IPs
+make client  # open loop at the default 100k req/s
+make logs    # tail the first node's std.log
+make stop    # kill the servers
 ```
 
-Config comes from the shared `../.env` (see root `.env.example`); every flag
-shown here can be overridden on the `make` command line. The full list, including
-the ones still at their default, is one reference table in
-[Development](#make-flag-reference); the four that differ from upstream (`SYNC`,
-`PIPELINE`, `AE_CACHE`, `SERVER_CONCURRENCY`) have their own table and the story
-behind each right below, since knowing *that* they changed matters more than
-knowing they exist.
+Config comes from the shared `../.env` (see root `.env.example`). Ten of the
+`make client` flags (`MODE`, `RATE`, `THREADS`, `BURST`, `MAX_INFLIGHT`,
+`WARMUP`, `MEASURE`, `DRAIN_TIMEOUT`, `PACE`, `HDR_OUT`) are named and behave
+identically across all three products in this repo and are documented once in
+the root README's [Load modes](../README.md#load-modes); the table in
+[Development](#make-flag-reference) below covers only what's specific to
+braft — `PORT`, and the four settings that differ from upstream (`SYNC`,
+`PIPELINE`, `AE_CACHE`, `SERVER_CONCURRENCY`), whose story is in
+[Tuning](#tuning) right below.
 
 Examples:
 
@@ -108,12 +89,13 @@ ssh). If you override `PORT` on `make start`, also set `-var raft_port=<port>`
 on `terraform apply` (or edit the default in `deploy/main.tf`) so the security
 group rule matches.
 
+## Tuning
 
-## Non-default settings
+### Non-default settings
 
 Everything this harness runs with that differs from upstream, and the `make`
-variable that controls it. Overriding any of these on `make start` reproduces the
-upstream behaviour.
+variable that controls it. Overriding any of these on `make start` reproduces
+the upstream behaviour.
 
 | Setting | Upstream | Here | `make` variable | Why |
 |---|---|---|---|---|
@@ -127,7 +109,7 @@ upstream or brpc default, because it was measured and made no difference (or was
 worse) — see [Development](#development) for the full list and the two
 diagnostic flags (`TRACE_LAT`, `HIGH_LAT_US`).
 
-## What fixed braft's tail: `raft_enable_append_entries_cache`
+### What fixed braft's tail: `raft_enable_append_entries_cache`
 
 Off by default in braft, and worth more than every other knob combined.
 
@@ -178,7 +160,7 @@ worse than 4 with the cache off, because deeper pipelining creates more reorderi
 and therefore more rejected RPCs. With the cache on, `PIPELINE=16` is fine again
 (p99 1188/1199 µs) — just no longer better than the now-default 8.
 
-### How it was found, and what it cost to find
+#### How it was found, and what it cost to find
 
 Worth recording because the search was almost entirely wrong before it was right.
 Two rounds of tuning at a fixed 100k, 21 runs in the first
@@ -305,12 +287,39 @@ would need to be re-run against `PIPELINE=8` now that it's the default, not the
 
 ## Development
 
-Manual steps and implementation-detail settings that a benchmark run doesn't
-need — useful for extending or troubleshooting this harness, not for using it.
+Setup, manual steps and implementation-detail settings that a benchmark run
+doesn't need — useful for extending or troubleshooting this harness, not for
+using it.
 
-### Building manually
+### Install
 
-`make build` (above) wraps this:
+Build tools and the vcpkg package manager. Tested with the versions installed by
+default on Ubuntu 22.
+
+```sh
+sudo apt install cmake g++ ninja-build flex bison pkg-config
+git clone https://github.com/microsoft/vcpkg
+export VCPKG_ROOT='~/workspace/vcpkg'
+export PATH="$VCPKG_ROOT:$PATH"
+```
+
+### Building
+
+```sh
+make build
+```
+
+Builds three binaries as Release — this is a benchmarking repo, so that's the
+default preset, and a debug build would badly distort every latency/throughput
+number in this README.
+
+| Binary | What it is |
+|---|---|
+| `atomic_server` | The raft node — braft's stock atomic-counter example (int64 compare-exchange over a brpc service), run three times to form the cluster |
+| `atomic_client` | The load generator this repo adds — open- and closed-loop modes, HdrHistogram percentiles; everything under [Benchmark on EC2](#benchmark-on-ec2) drives this |
+| `test` | A small one-shot CLI (`--atomic_op=get\|set\|cas`) for poking a running cluster by hand — not used by the benchmark itself, useful for sanity-checking a deploy |
+
+`make build` wraps the raw `cmake` steps:
 
 ```sh
 cmake --preset default .    # 'default' and its alias 'release' build with
@@ -320,8 +329,7 @@ cmake --build build
 
 You may need to change tool paths in `CMakePresets.json` first. Use
 `cmake --preset debug .` instead of `default` only when you need an unoptimized
-build with assertions to troubleshoot a crash; debug binaries badly distort
-every latency/throughput number in this README.
+build with assertions to troubleshoot a crash.
 
 ### Running locally
 
@@ -335,11 +343,13 @@ quick sanity check before touching the fleet:
 
 ### `make` flag reference
 
-Every flag this harness's Makefile exposes, default or not — the four that
-changed from upstream (`SYNC`, `PIPELINE`, `AE_CACHE`, `SERVER_CONCURRENCY`) are
-included here too for completeness, but their story lives in
-[Non-default settings](#non-default-settings) and the two sections after it;
-this table exists to answer "what can I pass to `make`", not "what did you find".
+Every flag this harness's Makefile exposes that's specific to braft. Ten more
+— `MODE`, `RATE`, `THREADS`, `BURST`, `MAX_INFLIGHT`, `WARMUP`, `MEASURE`,
+`DRAIN_TIMEOUT`, `PACE`, `HDR_OUT` — are shared verbatim across all three
+products and documented once in the root README's
+[Load modes](../README.md#load-modes). The four below marked non-default have
+their story in [Tuning](#tuning); this table exists to answer "what can I pass
+to `make`", not "what did you find".
 
 | Flag | Target | Default | Effect |
 |---|---|---|---|
@@ -358,21 +368,7 @@ this table exists to answer "what can I pass to `make`", not "what did you find"
 | `HIGH_LAT_US` | `start` | `1000000` | `-raft_append_entry_high_lat_us`; threshold for the above, microseconds |
 | `CONNECTION_TYPE` | `client` | unset | `--connection_type` on the client's channel. Empty leaves brpc's default (`single`) |
 | `CHANNELS` | `client` | `1` | Distinct connections the open-loop client round-robins over, via brpc `connection_group` |
-| `THREADS` | `client` | `100` | `-thread_num`; concurrent sending threads. All three products default to 100 so their numbers are comparable |
 | `CLIENT_CONCURRENCY` | `client` | `$(THREADS)` | `-bthread_concurrency` on the client; kept equal to `THREADS` so sending threads never queue for fewer real workers than they need |
-| `MODE` | `client` | `open` | `open` emits at `RATE` on a fixed schedule; requires `RATE`. `closed` keeps `THREADS` outstanding instead. See [root README](../README.md#load-modes) |
-| `RATE` | `client` | `100000` | Requests/sec offered in open mode |
-| `BURST` | `client` | `1` | Requests per scheduled instant; same mean rate, clustered arrivals |
-| `MAX_INFLIGHT` | `client` | derived | Cap on unanswered requests; hitting it counts as dropped-by-rig |
-| `WARMUP` | `client` | `10` | Seconds discarded before measuring |
-| `MEASURE` | `client` | `30` | Seconds recorded |
-| `DRAIN_TIMEOUT` | `client` | `10` | Seconds to wait for in-flight replies after the window closes |
-| `PACE` | `client` | `spin` | Open-mode wait strategy: `spin` with a spare core, `park` on a shared box |
-| `HDR_OUT` | `client` | unset | Write a percentile report to this path |
-
-The rig-mechanics rows (`THREADS` through `HDR_OUT`) are shared verbatim across
-all three products and explained in more depth once, in the
-[root README](../README.md#load-modes), rather than repeated per product here.
 
 Not exposed as a `make` variable at all, so these sit at whatever
 `run_server.sh`'s own `shflags` defaults are — which mirror upstream, and were
