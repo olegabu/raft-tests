@@ -51,6 +51,12 @@ HIGH_LAT_US        ?= 1000000
 # Ports match gateway/relay/README.md's own worked example.
 RELAY_LISTEN_PORT ?= 8500
 RELAY_GRPC_PORT   ?= 8501
+# Empty (the default) leaves the relay binary's own gflag default
+# (1024, gateway/relay/src/relay_grpc_service_impl.hpp) in place —
+# override to sweep batch-size sensitivity, e.g.
+# RELAY_MAX_BATCH_RECORDS=256.
+RELAY_MAX_BATCH_RECORDS ?=
+RELAY_MAX_BATCH_FLAG = $(if $(RELAY_MAX_BATCH_RECORDS),--relay_max_batch_records=$(RELAY_MAX_BATCH_RECORDS),)
 
 # Phase 1 (see sequencer's specification.md §3): measures exactly the
 # same round trip raft-tests/braft/client.cpp does — submit to
@@ -159,7 +165,7 @@ start:
 		"cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid) 2>/dev/null; :; }; \
 		 rm -f sequencer_relay.pid; sleep 1; \
 		 nohup ./sequencer_relay --data_dir=$(NODE_DIR)/data --listen_port=$(RELAY_LISTEN_PORT) \
-			--grpc_listen_port=$(RELAY_GRPC_PORT) --logtostderr --logbufsecs=0 \
+			--grpc_listen_port=$(RELAY_GRPC_PORT) $(RELAY_MAX_BATCH_FLAG) --logtostderr --logbufsecs=0 \
 			> $(NODE_DIR)/relay.log 2>&1 < /dev/null & echo \$$! > sequencer_relay.pid"
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
 		"cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }; \

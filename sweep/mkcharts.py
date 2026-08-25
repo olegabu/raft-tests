@@ -141,7 +141,7 @@ CFG={
               [(122000,"knee",16)],
               "sequencer — flat to ~115k, then a severe stall",
               "achieved plateaus at ~123-126k past the knee regardless of offered rate; p50 crosses 1s by 130k."),
- # Two real bugs, both fixed, both in the relay gateway's own gRPC
+ # Three rounds of fixes, all in the relay gateway's own gRPC
  # Subscribe implementation (gateway/relay/src/relay_grpc_service_impl.hpp)
  # -- not this rig, not sequencer's consensus/ack path. (1) One
  # journal record per Write() call, no batching: at counter-record
@@ -149,26 +149,29 @@ CFG={
  # own fixed per-call overhead dominated completely, producing a
  # severe cliff around 25k-40k. Fixed by gathering every record
  # already available (up to --relay_max_batch_records, default 1024)
- # into one RecordBatch per Write() -- never delaying a send to wait
- # for more. (2) The fix's own gather loop introduced a second,
- # accidental bug: re-checking context->IsCancelled() on every record
- # inside that loop, not once per batch -- IsCancelled() plucks
- # gRPC's completion queue under the hood, so this was cheap once per
- # batch and catastrophic once per record (measured: ~3000x slower
- # backlog catch-up). Fixed by checking it only in the outer,
- # once-per-batch loop. See gateway/relay/README.md's "Batching the
- # gRPC stream" section for the full writeup. Re-swept clean after
- # both fixes (raft-tests/sequencer/README.md): p50 flat 3.1-5.1ms
- # from 10k through 115k, then a real cliff at 130k (p50 1.58s) --
- # landing at essentially the *same* rate as phase 1's own knee (see
- # the "sequencer" entry above: flat to ~115k, plateau ~123-126k).
- # The relay no longer bottlenecks ahead of sequencer's own consensus
- # path; what's left is sequencer's own ceiling, not the relay's.
- "sequencer-relay": (200000,25000,(2000,20000000),
-                     [5000,10000,50000,200000,1000000,5000000,20000000], 115000,
-                     [(122000,"knee",16)],
-                     "sequencer-relay — tracks sequencer's own knee, not a separate ceiling",
-                     "p50 flat 3-5ms from 10k to 115k; the cliff at 130k lands where phase 1's own knee already was."),
+ # into one RecordBatch per Write(). (2) That fix's own gather loop
+ # introduced a second, accidental bug: re-checking
+ # context->IsCancelled() on every record instead of once per batch --
+ # IsCancelled() plucks gRPC's completion queue under the hood, ~3000x
+ # slower per record than per batch. (3) Rewrote Subscribe onto gRPC's
+ # callback/reactor API (grpc::ServerWriteReactor) in pursuit of
+ # sub-millisecond p50 at 100k: this dropped p50 to 649us-1.3ms
+ # through 100k (actually *beating* phase 1's own synchronous-ack p50
+ # at the same rates) but did not reach <1ms exactly at 100k, and
+ # moved the throughput cliff *down* from 130k to 115k -- a real
+ # trade-off, not a strict win, and not (per a --relay_max_batch_records
+ # sweep at 128/1024/8192) primarily a batch-size effect: p50 barely
+ # moves across that range at 100k. See gateway/relay/README.md's
+ # "Batching the gRPC stream" section for the full writeup, including
+ # the chained-OnWriteDone variant that was tried and reverted after
+ # measuring *worse* p50 at 100k despite removing a cross-thread
+ # wake/schedule round trip that seemed like it should only help --
+ # the real cause of the 115k ceiling is still open.
+ "sequencer-relay": (200000,25000,(500,20000000),
+                     [1000,5000,50000,200000,1000000,5000000,20000000], 100000,
+                     [(112000,"ceiling",16)],
+                     "sequencer-relay — sub-2ms through 100k, but a lower ceiling than the old design",
+                     "p50 649us-1.3ms from 10k to 100k, beating phase 1's own ack latency; cliff moved from 130k to 115k."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:
