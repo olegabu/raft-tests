@@ -19,6 +19,30 @@ INPUT_GATEWAY_PORT ?= 8400
 GROUP             ?= sequencer
 ELECTION_TIMEOUT_MS ?= 1000
 
+# braft's own tuning, at the values ../braft/README.md's optimization
+# trials found — not braft's defaults. These are braft's own gflags
+# (registered by libbraft itself at static-init time, so counter_node
+# gets every one of them for free just by linking it, no code of
+# sequencer's own involved — see specification.md's own account of
+# checking this directly) — variable names and defaults deliberately
+# identical to ../braft/Makefile's, so `make start PIPELINE=4` means
+# the same thing in both directories and a side-by-side comparison
+# is actually apples to apples, not "tuned vs untuned" by accident.
+# See ../braft/README.md's "What fixed braft's tail" (AE_CACHE) and
+# "Deciding PIPELINE" for what each one is and why this value.
+SYNC               ?= false
+EVENT_DISPATCHERS  ?= 1
+SERVER_CONCURRENCY ?= 18
+PIPELINE           ?= 8
+AE_CACHE           ?= true
+AE_CACHE_SIZE      ?= 8
+LEADER_BATCH       ?= 256
+APPLY_BATCH        ?= 32
+FSM_COMMIT_BATCH   ?= 512
+SEGMENT_SIZE       ?= 8388608
+TRACE_LAT          ?= false
+HIGH_LAT_US        ?= 1000000
+
 # One relay is enough for this benchmark (RelayObserver only ever
 # subscribes to one), so it runs colocated with NODE1 only, not one
 # per node the way a real deployment would (specification.md §3.3) —
@@ -56,7 +80,7 @@ PEERS      = $(NODE1_PRIV):$(PORT):0,$(NODE2_PRIV):$(PORT):0,$(NODE3_PRIV):$(POR
 NODE_DIR   = /data/$(APP)
 CLIENT_DIR = $(APP)
 
-.PHONY: build push start stop client client-relay logs logs-relay
+.PHONY: build push start stop clean-data client client-relay logs logs-relay
 
 ## Build sequencer's Release preset (this is a benchmarking repo — see
 ## sequencer's own README's debug-vs-release note); requires a sibling
@@ -112,6 +136,16 @@ define start_node
 		 rm -f $(APP)_node.pid; sleep 1; \
 		 nohup ./$(APP)_node --group=$(GROUP) --peer=$(2):$(PORT):0 --peers='$(PEERS)' \
 			--election_timeout_ms=$(ELECTION_TIMEOUT_MS) --data_dir=$(NODE_DIR)/data \
+			--raft_sync=$(SYNC) --event_dispatcher_num=$(EVENT_DISPATCHERS) \
+			--bthread_concurrency=$(SERVER_CONCURRENCY) \
+			--raft_max_parallel_append_entries_rpc_num=$(PIPELINE) \
+			--raft_enable_append_entries_cache=$(AE_CACHE) \
+			--raft_max_append_entries_cache_size=$(AE_CACHE_SIZE) \
+			--raft_leader_batch=$(LEADER_BATCH) --raft_apply_batch=$(APPLY_BATCH) \
+			--raft_fsm_caller_commit_batch=$(FSM_COMMIT_BATCH) \
+			--raft_max_segment_size=$(SEGMENT_SIZE) \
+			--raft_trace_append_entry_latency=$(TRACE_LAT) \
+			--raft_append_entry_high_lat_us=$(HIGH_LAT_US) \
 			--logtostderr --logbufsecs=0 \
 			> $(NODE_DIR)/std.log 2>&1 < /dev/null & echo \$$! > $(APP)_node.pid"
 endef
@@ -141,6 +175,32 @@ stop:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid); :; }"
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid); :; }"
 
+## Wipe every node's journal (run with the fleet stopped). Before a
+## sweep meant to be reproducible from a known-empty starting point —
+## a fresh journal makes --relay_from_sequence_number's default (0,
+## "from the beginning") correct by construction instead of relying on
+## RelayObserver's own backlog-skipping (bench/load_generator/README.md)
+## to paper over a long-lived journal, and keeps every sweep point's
+## own "achieved rate" describing that point's traffic alone.
+clean-data:
+	for h in $(NODES); do \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h "rm -rf $(NODE_DIR)/data" ; \
+	done
+
+# Empty (default): client is phase 1 only, byte-for-byte the same
+# invocation as before this variable existed. Set to enable phase 3's
+# second, separately-labeled summary (relay_p50_us, etc.) in the same
+# run — RelayObserver, running inside the load generator process
+# itself, subscribing to sequencer_relay over real gRPC (needs `start`
+# to have brought it up on NODE1 first). A Make variable rather than a
+# second target's own hardcoded flag specifically so sweep.sh (shared,
+# unmodified, in the sibling sweep/ directory) can drive a phase-3
+# sweep through this exact same target, the same way it already drives
+# phase 1 — see sweep-relay.sh, which sets this via sweep.sh's own
+# generic $EXTRA argument.
+RELAY_GRPC_ADDR ?=
+RELAY_FLAG = $(if $(RELAY_GRPC_ADDR),--relay_grpc_addr=$(RELAY_GRPC_ADDR),)
+
 ## Run the load generator from the client box (override THREADS=n).
 ## Flag names deliberately match braft/Makefile's `client:` target
 ## (--mode/--rate/--burst/--max_inflight/--warmup/--measure/
@@ -153,22 +213,14 @@ client:
 			--mode $(MODE) --pace $(PACE) \
 			--thread_num $(THREADS) $(OPEN_FLAGS) \
 			--warmup $(WARMUP) --measure $(MEASURE) \
-			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) --logtostderr"
+			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) $(RELAY_FLAG) --logtostderr"
 
-## Phase 3 (bench/load_generator/README.md): the same run as `client`,
-## plus a second, separately-labeled summary (relay_p50_us, etc.) for
-## submission-to-relay-delivery latency — RelayObserver, running
-## inside the load generator process itself, subscribing to
-## sequencer_relay over real gRPC. Needs `start` to have brought
-## sequencer_relay up on NODE1 first.
+## Convenience alias for `make client` with RELAY_GRPC_ADDR already
+## pointed at the relay `start` brought up on NODE1 — see RELAY_FLAG's
+## own comment above for why this is a thin wrapper around client
+## rather than its own independent recipe.
 client-relay:
-	ssh -t $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
-		"cd $(CLIENT_DIR) && ./$(APP)_load_generator --input_gateway_addr=127.0.0.1:$(INPUT_GATEWAY_PORT) \
-			--mode $(MODE) --pace $(PACE) \
-			--thread_num $(THREADS) $(OPEN_FLAGS) \
-			--warmup $(WARMUP) --measure $(MEASURE) \
-			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) \
-			--relay_grpc_addr=$(NODE1_PRIV):$(RELAY_GRPC_PORT) --logtostderr"
+	$(MAKE) client RELAY_GRPC_ADDR=$(NODE1_PRIV):$(RELAY_GRPC_PORT)
 
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/std.log"
