@@ -86,32 +86,60 @@ push:
 ## Start one node per NODE[123], sequencer_relay colocated with NODE1
 ## (reading that same node's own data_dir), and the input gateway on
 ## the client box.
+##
+## PID files, not `pkill -f <name>`: over ssh, the *remote shell
+## process executing this very command* has that name as a literal
+## substring of its own command line (the whole quoted script we sent
+## it) -- `pkill -f` matches and kills that shell mid-script, not just
+## a stale prior instance, aborting the whole ssh session (exit 255,
+## no output — reproduced directly against a live host). `pkill -x`
+## would dodge that but re-breaks on counter_input_gateway specifically:
+## 22 characters, longer than the kernel's 15-char process-name field,
+## so it never matches the truncated name either. PID files sidestep
+## both.
+# Takes (public IP, private IP) and starts that one node. A canned
+# recipe with Make-level parameters, not a shell for-loop indexing
+# into NODE1_PRIV/NODE2_PRIV/NODE3_PRIV by number: those only exist as
+# Make variables (from -include ../.env), never exported to the
+# recipe's own shell, so a shell-side `eval echo \$NODE${i}_PRIV`
+# silently reads nothing — reproduced directly: priv='' — and
+# `--peer=:8300:0` is exactly what crashed braft's own config parser
+# on a live host. $(1)/$(2) below are resolved by Make itself, so
+# there is no runtime lookup left to get wrong.
+define start_node
+	ssh $(SSH_OPTS) $(SSH_USER)@$(1) \
+		"cd $(NODE_DIR) && { [ -f $(APP)_node.pid ] && kill -TERM \$$(cat $(APP)_node.pid) 2>/dev/null; :; }; \
+		 rm -f $(APP)_node.pid; sleep 1; \
+		 nohup ./$(APP)_node --group=$(GROUP) --peer=$(2):$(PORT):0 --peers='$(PEERS)' \
+			--election_timeout_ms=$(ELECTION_TIMEOUT_MS) --data_dir=$(NODE_DIR)/data \
+			--logtostderr --logbufsecs=0 \
+			> $(NODE_DIR)/std.log 2>&1 < /dev/null & echo \$$! > $(APP)_node.pid"
+endef
+
 start:
-	for h in $(NODES); do \
-		i=1; for n in $(NODES); do [ "$$n" = "$$h" ] && break; i=$$((i+1)); done ; \
-		priv=$$(eval echo \$$NODE$${i}_PRIV) ; \
-		ssh $(SSH_OPTS) $(SSH_USER)@$$h \
-			"cd $(NODE_DIR) && pkill -f ./$(APP)_node 2>/dev/null; sleep 1; \
-			 nohup ./$(APP)_node --group=$(GROUP) --peer=$$priv:$(PORT):0 --peers='$(PEERS)' \
-				--election_timeout_ms=$(ELECTION_TIMEOUT_MS) --data_dir=$(NODE_DIR)/data \
-				> $(NODE_DIR)/std.log 2>&1 < /dev/null &" ; \
-	done
+	$(call start_node,$(NODE1),$(NODE1_PRIV))
+	$(call start_node,$(NODE2),$(NODE2_PRIV))
+	$(call start_node,$(NODE3),$(NODE3_PRIV))
 	sleep 3
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) \
-		"cd $(NODE_DIR) && pkill -f ./sequencer_relay 2>/dev/null; sleep 1; \
+		"cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid) 2>/dev/null; :; }; \
+		 rm -f sequencer_relay.pid; sleep 1; \
 		 nohup ./sequencer_relay --data_dir=$(NODE_DIR)/data --listen_port=$(RELAY_LISTEN_PORT) \
-			--grpc_listen_port=$(RELAY_GRPC_PORT) > $(NODE_DIR)/relay.log 2>&1 < /dev/null &"
+			--grpc_listen_port=$(RELAY_GRPC_PORT) --logtostderr --logbufsecs=0 \
+			> $(NODE_DIR)/relay.log 2>&1 < /dev/null & echo \$$! > sequencer_relay.pid"
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
-		"cd $(CLIENT_DIR) && pkill -f ./$(APP)_input_gateway 2>/dev/null; sleep 1; \
+		"cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }; \
+		 rm -f $(APP)_input_gateway.pid; sleep 1; \
 		 nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
-			--listen_port=$(INPUT_GATEWAY_PORT) > $(CLIENT_DIR)/std.log 2>&1 < /dev/null &"
+			--listen_port=$(INPUT_GATEWAY_PORT) --logtostderr --logbufsecs=0 \
+			> std.log 2>&1 < /dev/null & echo \$$! > $(APP)_input_gateway.pid"
 
 stop:
 	for h in $(NODES); do \
-		ssh $(SSH_OPTS) $(SSH_USER)@$$h "pkill -TERM -f ./$(APP)_node" ; \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h "cd $(NODE_DIR) && { [ -f $(APP)_node.pid ] && kill -TERM \$$(cat $(APP)_node.pid); :; }" ; \
 	done
-	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "pkill -TERM -f ./sequencer_relay"
-	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "pkill -TERM -f ./$(APP)_input_gateway"
+	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid); :; }"
+	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid); :; }"
 
 ## Run the load generator from the client box (override THREADS=n).
 ## Flag names deliberately match braft/Makefile's `client:` target
@@ -125,7 +153,7 @@ client:
 			--mode $(MODE) --pace $(PACE) \
 			--thread_num $(THREADS) $(OPEN_FLAGS) \
 			--warmup $(WARMUP) --measure $(MEASURE) \
-			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG)"
+			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) --logtostderr"
 
 ## Phase 3 (bench/load_generator/README.md): the same run as `client`,
 ## plus a second, separately-labeled summary (relay_p50_us, etc.) for
@@ -140,7 +168,7 @@ client-relay:
 			--thread_num $(THREADS) $(OPEN_FLAGS) \
 			--warmup $(WARMUP) --measure $(MEASURE) \
 			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) \
-			--relay_grpc_addr=$(NODE1_PRIV):$(RELAY_GRPC_PORT)"
+			--relay_grpc_addr=$(NODE1_PRIV):$(RELAY_GRPC_PORT) --logtostderr"
 
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/std.log"
