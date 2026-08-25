@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="440" viewBox="0 0 820 440" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="sequencer-relay — likely RelayObserver's own limit, not sequencer's">
+<rect width="820" height="440" fill="#fcfcfb"/>
+<text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer-relay — likely RelayObserver's own limit, not sequencer's</text>
+<text x="78" y="46" font-size="12" fill="#52514e">p90 explodes 150x from 25k to 40k while p50 barely moves; above 70k, zero correlated records at all.</text>
+<text x="78" y="62" font-size="12" fill="#52514e">p50 and p99 latency, open loop. Hollow marker = the cluster fell behind the offered rate.</text>
+<rect x="78" y="86" width="194.4" height="280" fill="#f0efec"/>
+<text x="86" y="102" font-size="11" fill="#898781">comfort zone</text>
+<line x1="311.2" y1="86" x2="311.2" y2="366" stroke="#898781" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="317.2" y="102" font-size="11" font-weight="600" fill="#52514e">observer's own ceiling</text>
+<line x1="78" y1="340.1" x2="700" y2="340.1" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="344.1" font-size="11" fill="#898781" text-anchor="end">5,000</text>
+<line x1="78" y1="320.5" x2="700" y2="320.5" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="324.5" font-size="11" fill="#898781" text-anchor="end">10,000</text>
+<line x1="78" y1="275.0" x2="700" y2="275.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="279.0" font-size="11" fill="#898781" text-anchor="end">50,000</text>
+<line x1="78" y1="235.8" x2="700" y2="235.8" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="239.8" font-size="11" fill="#898781" text-anchor="end">200,000</text>
+<line x1="78" y1="190.3" x2="700" y2="190.3" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="194.3" font-size="11" fill="#898781" text-anchor="end">1,000,000</text>
+<line x1="78" y1="144.8" x2="700" y2="144.8" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="148.8" font-size="11" fill="#898781" text-anchor="end">5,000,000</text>
+<line x1="78" y1="105.6" x2="700" y2="105.6" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="109.6" font-size="11" fill="#898781" text-anchor="end">20,000,000</text>
+<text x="20" y="226" font-size="11" fill="#52514e" text-anchor="middle" transform="rotate(-90 20 226)">latency (µs), log scale</text>
+<line x1="78" y1="366" x2="700" y2="366" stroke="#c3c2b7" stroke-width="1"/>
+<line x1="78.0" y1="366" x2="78.0" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="78.0" y="386" font-size="11" fill="#898781" text-anchor="middle">0k</text>
+<line x1="155.8" y1="366" x2="155.8" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="155.8" y="386" font-size="11" fill="#898781" text-anchor="middle">10k</text>
+<line x1="233.5" y1="366" x2="233.5" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="233.5" y="386" font-size="11" fill="#898781" text-anchor="middle">20k</text>
+<line x1="311.2" y1="366" x2="311.2" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="311.2" y="386" font-size="11" fill="#898781" text-anchor="middle">30k</text>
+<line x1="389.0" y1="366" x2="389.0" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="389.0" y="386" font-size="11" fill="#898781" text-anchor="middle">40k</text>
+<line x1="466.8" y1="366" x2="466.8" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="466.8" y="386" font-size="11" fill="#898781" text-anchor="middle">50k</text>
+<line x1="544.5" y1="366" x2="544.5" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="544.5" y="386" font-size="11" fill="#898781" text-anchor="middle">60k</text>
+<line x1="622.2" y1="366" x2="622.2" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="622.2" y="386" font-size="11" fill="#898781" text-anchor="middle">70k</text>
+<line x1="700.0" y1="366" x2="700.0" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="700.0" y="386" font-size="11" fill="#898781" text-anchor="middle">80k</text>
+<text x="389" y="410" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>
+<path d="M155.8,336.7 L272.4,335.3 L389.0,163.7 L505.6,115.5 L622.2,92.9" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="155.8" cy="336.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="272.4" cy="335.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="389.0" cy="163.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="505.6" cy="115.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="622.2" cy="92.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="634.2" y="96.9" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
+<path d="M155.8,352.9 L272.4,351.1 L389.0,346.0 L505.6,145.5 L622.2,94.7" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="155.8" cy="352.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="272.4" cy="351.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="389.0" cy="346.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="505.6" cy="145.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="622.2" cy="94.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="634.2" y="98.7" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
+<circle cx="83" cy="424" r="4.5" fill="#2a78d6"/>
+<text x="94" y="428" font-size="11" fill="#52514e">p50</text>
+<circle cx="128.8" cy="424" r="4.5" fill="#eb6834"/>
+<text x="139.8" y="428" font-size="11" fill="#52514e">p99</text>
+</svg>

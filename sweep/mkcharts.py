@@ -141,6 +141,28 @@ CFG={
               [(122000,"knee",16)],
               "sequencer — flat to ~115k, then a severe stall",
               "achieved plateaus at ~123-126k past the knee regardless of offered rate; p50 crosses 1s by 130k."),
+ # CAUTION, read before trusting this one: relay_dropped_races stayed
+ # at 1 throughout the sweep this came from (RelayObserver's own
+ # wait-for-a-race mechanism basically never fired), yet p90 explodes
+ # 150x between 25k and 40k while p50 barely moves -- the signature of
+ # a single consumer thread's own raw processing throughput falling
+ # behind a stream, backlog compounding over the run (later records
+ # look worse than earlier ones), not genuine per-record dissemination
+ # lag. Above 70k RelayObserver correlated *zero* records at all for
+ # the whole run -- not "instant," no data, silently truncated out of
+ # this chart's own CSV (raft-tests/sequencer/ has both the full sweep
+ # and the truncated, chartable rows — see its README). Read this as
+ # "RelayObserver's own current single-threaded design tops out
+ # somewhere under 40k," not "sequencer's relay gateway does" -- those
+ # are different claims and only the sweep above ~85k (where the core
+ # pipeline, not this observer, is what's saturating) can tell the two
+ # apart. Worth fixing (move correlation off the gRPC read loop, onto
+ # its own worker) and re-sweeping before reporting this further.
+ "sequencer-relay": (80000,10000,(2000,40000000),
+                     [5000,10000,50000,200000,1000000,5000000,20000000], 25000,
+                     [(30000,"observer's own ceiling",16)],
+                     "sequencer-relay — likely RelayObserver's own limit, not sequencer's",
+                     "p90 explodes 150x from 25k to 40k while p50 barely moves; above 70k, zero correlated records at all."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:
