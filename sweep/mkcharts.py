@@ -89,16 +89,24 @@ axes(o,L,T,PW,PH,XMAX,100000,[500,1000,2000,5000,10000],"p50 latency (log scale)
 # whole range) and there is enough clearance from the y-axis to avoid the
 # tick labels.
 LABEL_AT = {"aeron": ("last", 12, 4), "braft": ("last", 12, -6), "openraft": (85000, -12, 4)}
-for name,col in (("aeron",C1),("braft",C2),("openraft",C3)):
+# Guarded, not D[name] unconditionally: a sweep CSV for a new product
+# (raft-tests/sequencer/README.md's own, for one) legitimately has
+# none of these three -- this combined chart is specifically the
+# three-way comparison, not "every product present," and a KeyError
+# here would block that new product's own per-product chart below
+# from ever being reached at all.
+present = [(name,col) for name,col in (("aeron",C1),("braft",C2),("openraft",C3)) if name in D]
+for name,col in present:
     series(o,D[name],col,xm,ym,"p50")
     at,dx,dy = LABEL_AT[name]
     pt = D[name][-1] if at=="last" else next(p for p in D[name] if p["rate"]==at)
     anchor = ' text-anchor="end"' if dx<0 else ""
     o.append(f'<text x="{xm(pt["rate"])+dx:.1f}" y="{ym(pt["p50"])+dy:.1f}" font-size="12"{anchor} '
              f'font-weight="600" fill="{INK}">{name}</text>')
-legend(o,L,H,[("aeron",C1),("braft",C2),("openraft",C3)])
+legend(o,L,H,present)
 o.append('</svg>')
-open(f"{OUT}/knee-curves.svg","w").write("\n".join(o))
+if present:
+    open(f"{OUT}/knee-curves.svg","w").write("\n".join(o))
 
 # ---------- per product: p50 + p99, linear y, comfort band + knee rule ----------
 CFG={
@@ -116,6 +124,11 @@ CFG={
               "A 16x change in offered rate, 25k to 400k, moves p50 by 68 µs."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
+    if name not in D:
+        # CFG lists every product this script *knows how to* chart;
+        # a given CSV (raft-tests/sequencer/README.md's own sweeps,
+        # for instance) legitimately has only one or two of them.
+        continue
     W,H,L,R,T,B=820,440,78,120,86,74
     PW,PH=W-L-R,H-T-B
     ylo,yhi=math.log10(yrange[0]),math.log10(yrange[1])
@@ -142,4 +155,6 @@ for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     legend(o,L,H,[("p50",C1),("p99",C2)])
     o.append('</svg>')
     open(f"{OUT}/knee-{name}.svg","w").write("\n".join(o))
-print(f"wrote knee-curves.svg and 3 per-product charts to {OUT}")
+_written = [n for n in CFG if n in D]
+_combined = "knee-curves.svg and " if present else ""
+print(f"wrote {_combined}{len(_written)} per-product chart(s) ({', '.join(_written)}) to {OUT}")
