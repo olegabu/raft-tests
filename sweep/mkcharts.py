@@ -141,28 +141,34 @@ CFG={
               [(122000,"knee",16)],
               "sequencer — flat to ~115k, then a severe stall",
               "achieved plateaus at ~123-126k past the knee regardless of offered rate; p50 crosses 1s by 130k."),
- # CAUTION, read before trusting this one: relay_dropped_races stayed
- # at 1 throughout the sweep this came from (RelayObserver's own
- # wait-for-a-race mechanism basically never fired), yet p90 explodes
- # 150x between 25k and 40k while p50 barely moves -- the signature of
- # a single consumer thread's own raw processing throughput falling
- # behind a stream, backlog compounding over the run (later records
- # look worse than earlier ones), not genuine per-record dissemination
- # lag. Above 70k RelayObserver correlated *zero* records at all for
- # the whole run -- not "instant," no data, silently truncated out of
- # this chart's own CSV (raft-tests/sequencer/ has both the full sweep
- # and the truncated, chartable rows — see its README). Read this as
- # "RelayObserver's own current single-threaded design tops out
- # somewhere under 40k," not "sequencer's relay gateway does" -- those
- # are different claims and only the sweep above ~85k (where the core
- # pipeline, not this observer, is what's saturating) can tell the two
- # apart. Worth fixing (move correlation off the gRPC read loop, onto
- # its own worker) and re-sweeping before reporting this further.
- "sequencer-relay": (80000,10000,(2000,40000000),
+ # RelayObserver was rebuilt (reader thread + a correlator worker pool,
+ # instead of one thread doing gRPC-read and correlation inline) after
+ # the single-threaded version's own processing throughput was
+ # suspected as the real limit here, not the relay gateway's. That
+ # suspicion is now ruled out: re-swept with the fixed observer (see
+ # raft-tests/sequencer/README.md), the *same* cliff shows up in the
+ # *same* place -- p50 flat (3.3-3.9ms) at 10k-25k, then 7.3 seconds
+ # at 40k, a 1900x jump from one rate step. relay_dropped_races stayed
+ # at 4 all sweep (the observer's own race window is not the issue),
+ # and relay_queue_high_water hit 15171 at 40k -- a real backlog
+ # forming upstream of the observer, in the relay gateway's own
+ # dissemination path (a single synchronous Subscribe loop writing one
+ # gRPC record at a time is the leading suspect; see spec.md §8.9).
+ # Above 55k the backlog never clears within the sweep's own run time:
+ # relay_completed=0 for the whole measurement window at every rate up
+ # to 175k (relay_skipped_historical instead climbs into the millions)
+ # -- not "instant," no data, silently truncated out of this chart's
+ # own CSV (raft-tests/sequencer/ has both the full sweep and the
+ # truncated, chartable rows — see its README). Meanwhile phase 1's
+ # own synchronous-ack path stays healthy at every one of these same
+ # rates (p50 850-1600us through 100k+, see the "sequencer" entry
+ # above) -- so this is specifically the relay gateway's dissemination
+ # throughput, not sequencer's consensus/ack path, and not this rig.
+ "sequencer-relay": (80000,10000,(2000,20000000),
                      [5000,10000,50000,200000,1000000,5000000,20000000], 25000,
-                     [(30000,"observer's own ceiling",16)],
-                     "sequencer-relay — likely RelayObserver's own limit, not sequencer's",
-                     "p90 explodes 150x from 25k to 40k while p50 barely moves; above 70k, zero correlated records at all."),
+                     [(32500,"relay dissemination limit",16)],
+                     "sequencer-relay — the relay gateway's own ceiling, confirmed",
+                     "p50 flat to 25k, then 7.3s at 40k -- a real backlog in relay dissemination, not the rig."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:

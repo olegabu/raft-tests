@@ -99,13 +99,12 @@ strictly required (`RelayObserver` fast-skips a pre-existing journal's
 backlog rather than choking on it — see sequencer's own git history
 for the bug that mattered until it was fixed), but it keeps every
 point's own `achieved` honestly describing that point's own traffic
-rather than an ever-growing prior journal, and it's what makes a
-sequencer node crashing on `JournalWriter::append: index file
-exhausted` (a real bug in sequencer's own journal, reproduced live
-against this fleet — its index file has a fixed capacity and throws,
-uncaught, once exhausted, rather than handling that gracefully; worth
-fixing in sequencer itself, not something worked around here) far
-less likely to land mid-sweep.
+rather than an ever-growing prior journal, and it's a good habit even
+though the sequencer-side bug that once made this matter more —
+`JournalWriter::append: index file exhausted`, a node crashing
+mid-sweep once its journal's fixed-capacity index filled up — is now
+fixed at the source (`JournalOptions`'s own defaults raised, not a
+rig workaround).
 
 ### Phase 1: `make sweep`
 
