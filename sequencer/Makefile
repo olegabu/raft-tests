@@ -57,6 +57,11 @@ RELAY_GRPC_PORT   ?= 8501
 # RELAY_MAX_BATCH_RECORDS=256.
 RELAY_MAX_BATCH_RECORDS ?=
 RELAY_MAX_BATCH_FLAG = $(if $(RELAY_MAX_BATCH_RECORDS),--relay_max_batch_records=$(RELAY_MAX_BATCH_RECORDS),)
+# Same idea, for the pump thread's busy-spin idle wait (default 2000,
+# see relay_grpc_service_impl.hpp) — override to sweep CPU-vs-latency
+# sensitivity, e.g. RELAY_IDLE_SPIN_ITERATIONS=0 for "never busy-spin."
+RELAY_IDLE_SPIN_ITERATIONS ?=
+RELAY_IDLE_SPIN_FLAG = $(if $(RELAY_IDLE_SPIN_ITERATIONS),--relay_idle_spin_iterations=$(RELAY_IDLE_SPIN_ITERATIONS),)
 
 # Phase 1 (see sequencer's specification.md §3): measures exactly the
 # same round trip raft-tests/braft/client.cpp does — submit to
@@ -165,7 +170,7 @@ start:
 		"cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid) 2>/dev/null; :; }; \
 		 rm -f sequencer_relay.pid; sleep 1; \
 		 nohup ./sequencer_relay --data_dir=$(NODE_DIR)/data --listen_port=$(RELAY_LISTEN_PORT) \
-			--grpc_listen_port=$(RELAY_GRPC_PORT) $(RELAY_MAX_BATCH_FLAG) --logtostderr --logbufsecs=0 \
+			--grpc_listen_port=$(RELAY_GRPC_PORT) $(RELAY_MAX_BATCH_FLAG) $(RELAY_IDLE_SPIN_FLAG) --logtostderr --logbufsecs=0 \
 			> $(NODE_DIR)/relay.log 2>&1 < /dev/null & echo \$$! > sequencer_relay.pid"
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
 		"cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }; \
