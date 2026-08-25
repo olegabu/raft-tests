@@ -228,11 +228,21 @@ stop:
 ## "from the beginning") correct by construction instead of relying on
 ## RelayObserver's own backlog-skipping (bench/load_generator/README.md)
 ## to paper over a long-lived journal, and keeps every sweep point's
-## own "achieved rate" describing that point's traffic alone.
+## own "achieved rate" describing that point's traffic alone. Also
+## wipes NODE1's output-gateway resume files (output_resume_<flavor>,
+## living outside $(NODE_DIR)/data on purpose — they're meant to
+## survive a normal restart, per specification.md §8.3's own
+## "restartable from any sequence number with identical output") —
+## reproduced live: a resume file surviving this target while the
+## journal it refers to didn't left an output gateway waiting forever
+## for a sequence number the fresh journal will never reach, an entire
+## sweep point silently reporting zero completions with no error
+## anywhere. Harmless if none exist yet (rm -f, not rm).
 clean-data:
 	for h in $(NODES); do \
 		ssh $(SSH_OPTS) $(SSH_USER)@$$h "rm -rf $(NODE_DIR)/data" ; \
 	done
+	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "rm -f $(NODE_DIR)/output_resume_*"
 
 # Empty (default): client is phase 1 only, byte-for-byte the same
 # invocation as before this variable existed. Set to enable phase 3's
