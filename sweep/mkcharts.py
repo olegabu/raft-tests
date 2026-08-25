@@ -122,6 +122,25 @@ CFG={
               [(460000,"knee",16)],
               "aeron — flat to 400k, then one step up",
               "A 16x change in offered rate, 25k to 400k, moves p50 by 68 µs."),
+ # raft-tests/sequencer/README.md's phase 1 (submission to synchronous
+ # receipt) — client -> input gateway -> node -> node -> input gateway
+ # -> client, one hop longer than bare braft on purpose. Not a gradual
+ # turn like braft's own: achieved plateaus hard at ~123-126k regardless
+ # of how much more is offered from 130k on, and p50 jumps from 2.5ms at
+ # 115k straight past 1 full *second* at 130k -- a real system-level
+ # stall, not the rig (dropped-by-rig stays 0 at every point except
+ # 145k, where it is 711009 -- the input gateway's own outstanding-call
+ # limit finally being hit, downstream of the stall, not the cause of
+ # it). Whether this exact knee position also reflects sequencer's
+ # default --burst=1 dispatch cost (braft's own README: an earlier
+ # revision mistook exactly this for aeron's real knee before a
+ # BURST=10 comparison run showed otherwise) is not yet established
+ # here -- worth a repeat sweep with BURST set before trusting 115-130k
+ # as sequencer's true ceiling rather than partly this rig's own.
+ "sequencer": (200000,25000,(400,2000000),[500,1000,2000,5000,10000,50000,200000,1000000], 115000,
+              [(122000,"knee",16)],
+              "sequencer — flat to ~115k, then a severe stall",
+              "achieved plateaus at ~123-126k past the knee regardless of offered rate; p50 crosses 1s by 130k."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:
