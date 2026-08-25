@@ -141,34 +141,34 @@ CFG={
               [(122000,"knee",16)],
               "sequencer — flat to ~115k, then a severe stall",
               "achieved plateaus at ~123-126k past the knee regardless of offered rate; p50 crosses 1s by 130k."),
- # RelayObserver was rebuilt (reader thread + a correlator worker pool,
- # instead of one thread doing gRPC-read and correlation inline) after
- # the single-threaded version's own processing throughput was
- # suspected as the real limit here, not the relay gateway's. That
- # suspicion is now ruled out: re-swept with the fixed observer (see
- # raft-tests/sequencer/README.md), the *same* cliff shows up in the
- # *same* place -- p50 flat (3.3-3.9ms) at 10k-25k, then 7.3 seconds
- # at 40k, a 1900x jump from one rate step. relay_dropped_races stayed
- # at 4 all sweep (the observer's own race window is not the issue),
- # and relay_queue_high_water hit 15171 at 40k -- a real backlog
- # forming upstream of the observer, in the relay gateway's own
- # dissemination path (a single synchronous Subscribe loop writing one
- # gRPC record at a time is the leading suspect; see spec.md §8.9).
- # Above 55k the backlog never clears within the sweep's own run time:
- # relay_completed=0 for the whole measurement window at every rate up
- # to 175k (relay_skipped_historical instead climbs into the millions)
- # -- not "instant," no data, silently truncated out of this chart's
- # own CSV (raft-tests/sequencer/ has both the full sweep and the
- # truncated, chartable rows — see its README). Meanwhile phase 1's
- # own synchronous-ack path stays healthy at every one of these same
- # rates (p50 850-1600us through 100k+, see the "sequencer" entry
- # above) -- so this is specifically the relay gateway's dissemination
- # throughput, not sequencer's consensus/ack path, and not this rig.
- "sequencer-relay": (80000,10000,(2000,20000000),
-                     [5000,10000,50000,200000,1000000,5000000,20000000], 25000,
-                     [(32500,"relay dissemination limit",16)],
-                     "sequencer-relay — the relay gateway's own ceiling, confirmed",
-                     "p50 flat to 25k, then 7.3s at 40k -- a real backlog in relay dissemination, not the rig."),
+ # Two real bugs, both fixed, both in the relay gateway's own gRPC
+ # Subscribe implementation (gateway/relay/src/relay_grpc_service_impl.hpp)
+ # -- not this rig, not sequencer's consensus/ack path. (1) One
+ # journal record per Write() call, no batching: at counter-record
+ # sizes (~40-50 bytes on the wire) a blocking synchronous Write()'s
+ # own fixed per-call overhead dominated completely, producing a
+ # severe cliff around 25k-40k. Fixed by gathering every record
+ # already available (up to --relay_max_batch_records, default 1024)
+ # into one RecordBatch per Write() -- never delaying a send to wait
+ # for more. (2) The fix's own gather loop introduced a second,
+ # accidental bug: re-checking context->IsCancelled() on every record
+ # inside that loop, not once per batch -- IsCancelled() plucks
+ # gRPC's completion queue under the hood, so this was cheap once per
+ # batch and catastrophic once per record (measured: ~3000x slower
+ # backlog catch-up). Fixed by checking it only in the outer,
+ # once-per-batch loop. See gateway/relay/README.md's "Batching the
+ # gRPC stream" section for the full writeup. Re-swept clean after
+ # both fixes (raft-tests/sequencer/README.md): p50 flat 3.1-5.1ms
+ # from 10k through 115k, then a real cliff at 130k (p50 1.58s) --
+ # landing at essentially the *same* rate as phase 1's own knee (see
+ # the "sequencer" entry above: flat to ~115k, plateau ~123-126k).
+ # The relay no longer bottlenecks ahead of sequencer's own consensus
+ # path; what's left is sequencer's own ceiling, not the relay's.
+ "sequencer-relay": (200000,25000,(2000,20000000),
+                     [5000,10000,50000,200000,1000000,5000000,20000000], 115000,
+                     [(122000,"knee",16)],
+                     "sequencer-relay — tracks sequencer's own knee, not a separate ceiling",
+                     "p50 flat 3-5ms from 10k to 115k; the cliff at 130k lands where phase 1's own knee already was."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:
