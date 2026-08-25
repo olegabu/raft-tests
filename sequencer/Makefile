@@ -63,6 +63,28 @@ RELAY_MAX_BATCH_FLAG = $(if $(RELAY_MAX_BATCH_RECORDS),--relay_max_batch_records
 RELAY_IDLE_SPIN_ITERATIONS ?=
 RELAY_IDLE_SPIN_FLAG = $(if $(RELAY_IDLE_SPIN_ITERATIONS),--relay_idle_spin_iterations=$(RELAY_IDLE_SPIN_ITERATIONS),)
 
+# The output-gateway counterpart to the relay above: the fourth round
+# trip (bench/load_generator/README.md), colocated with NODE1 for the
+# same reason. Empty (the default) starts none of the three flavors —
+# set to brpc/grpc/websocket to bring one up; only one runs at a time
+# on the fleet (all three share OUTPUT_GATEWAY_PORT and one pidfile),
+# matching how only one relay runs — nothing in the code forces this
+# (examples/counter/load_generator_main.cpp's --output_observer and
+# --relay_grpc_addr are independent and combinable), it's just what
+# this fleet's single-relay precedent already establishes as enough
+# for one benchmark run.
+OUTPUT_GATEWAY_FLAVOR ?=
+OUTPUT_GATEWAY_PORT   ?= 8600
+ifeq ($(OUTPUT_GATEWAY_FLAVOR),brpc)
+OUTPUT_GATEWAY_BIN := $(APP)_brpc_output_gateway
+else ifeq ($(OUTPUT_GATEWAY_FLAVOR),grpc)
+OUTPUT_GATEWAY_BIN := $(APP)_grpc_output_gateway
+else ifeq ($(OUTPUT_GATEWAY_FLAVOR),websocket)
+OUTPUT_GATEWAY_BIN := $(APP)_output_gateway
+else ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
+$(error OUTPUT_GATEWAY_FLAVOR must be empty, brpc, grpc, or websocket, got "$(OUTPUT_GATEWAY_FLAVOR)")
+endif
+
 # Phase 1 (see sequencer's specification.md §3): measures exactly the
 # same round trip raft-tests/braft/client.cpp does — submit to
 # synchronous receipt — just one hop longer, through sequencer's own
@@ -91,7 +113,7 @@ PEERS      = $(NODE1_PRIV):$(PORT):0,$(NODE2_PRIV):$(PORT):0,$(NODE3_PRIV):$(POR
 NODE_DIR   = /data/$(APP)
 CLIENT_DIR = $(APP)
 
-.PHONY: build push start stop clean-data client client-relay logs logs-relay
+.PHONY: build push start stop clean-data client client-relay client-output logs logs-relay logs-output
 
 ## Build sequencer's Release preset (this is a benchmarking repo — see
 ## sequencer's own README's debug-vs-release note); requires a sibling
@@ -113,6 +135,10 @@ push:
 		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_node $(SSH_USER)@$$h:$(NODE_DIR)/ ; \
 	done
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/gateway/relay/sequencer_relay $(SSH_USER)@$(NODE1):$(NODE_DIR)/
+	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_brpc_output_gateway \
+		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_grpc_output_gateway \
+		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_output_gateway \
+		$(SSH_USER)@$(NODE1):$(NODE_DIR)/
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "mkdir -p $(CLIENT_DIR)"
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_input_gateway \
 		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_load_generator \
@@ -178,12 +204,22 @@ start:
 		 nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
 			--listen_port=$(INPUT_GATEWAY_PORT) --logtostderr --logbufsecs=0 \
 			> std.log 2>&1 < /dev/null & echo \$$! > $(APP)_input_gateway.pid"
+ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
+	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) \
+		"cd $(NODE_DIR) && { [ -f $(APP)_output_gateway.pid ] && kill -TERM \$$(cat $(APP)_output_gateway.pid) 2>/dev/null; :; }; \
+		 rm -f $(APP)_output_gateway.pid; sleep 1; \
+		 nohup ./$(OUTPUT_GATEWAY_BIN) --data_dir=$(NODE_DIR)/data \
+			--resume_file=$(NODE_DIR)/output_resume_$(OUTPUT_GATEWAY_FLAVOR) \
+			--listen_port=$(OUTPUT_GATEWAY_PORT) --logtostderr --logbufsecs=0 \
+			> $(NODE_DIR)/output_gateway.log 2>&1 < /dev/null & echo \$$! > $(APP)_output_gateway.pid"
+endif
 
 stop:
 	for h in $(NODES); do \
 		ssh $(SSH_OPTS) $(SSH_USER)@$$h "cd $(NODE_DIR) && { [ -f $(APP)_node.pid ] && kill -TERM \$$(cat $(APP)_node.pid) 2>/dev/null; :; }" ; \
 	done
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid) 2>/dev/null; :; }"
+	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "cd $(NODE_DIR) && { [ -f $(APP)_output_gateway.pid ] && kill -TERM \$$(cat $(APP)_output_gateway.pid) 2>/dev/null; :; }"
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }"
 
 ## Wipe every node's journal (run with the fleet stopped). Before a
@@ -212,6 +248,15 @@ clean-data:
 RELAY_GRPC_ADDR ?=
 RELAY_FLAG = $(if $(RELAY_GRPC_ADDR),--relay_grpc_addr=$(RELAY_GRPC_ADDR),)
 
+# Same idea, for the fourth round trip (bench/load_generator/README.md):
+# empty disables output-gateway observation. OUTPUT_OBSERVER selects the
+# flavor (grpc/brpc/websocket) and must match whichever
+# OUTPUT_GATEWAY_FLAVOR `start` brought up — see client-output below for
+# the thin wrapper that sets both consistently.
+OUTPUT_OBSERVER ?=
+OUTPUT_GATEWAY_ADDR ?=
+OUTPUT_FLAG = $(if $(OUTPUT_OBSERVER),--output_observer=$(OUTPUT_OBSERVER) --output_gateway_addr=$(OUTPUT_GATEWAY_ADDR),)
+
 ## Run the load generator from the client box (override THREADS=n).
 ## Flag names deliberately match braft/Makefile's `client:` target
 ## (--mode/--rate/--burst/--max_inflight/--warmup/--measure/
@@ -224,7 +269,7 @@ client:
 			--mode $(MODE) --pace $(PACE) \
 			--thread_num $(THREADS) $(OPEN_FLAGS) \
 			--warmup $(WARMUP) --measure $(MEASURE) \
-			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) $(RELAY_FLAG) --logtostderr"
+			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) $(RELAY_FLAG) $(OUTPUT_FLAG) --logtostderr"
 
 ## Convenience alias for `make client` with RELAY_GRPC_ADDR already
 ## pointed at the relay `start` brought up on NODE1 — see RELAY_FLAG's
@@ -233,11 +278,23 @@ client:
 client-relay:
 	$(MAKE) client RELAY_GRPC_ADDR=$(NODE1_PRIV):$(RELAY_GRPC_PORT)
 
+## Same idea for the output gateway: OUTPUT_GATEWAY_FLAVOR must name
+## whichever flavor `start` actually brought up (brpc/grpc/websocket) —
+## this just points OUTPUT_OBSERVER/OUTPUT_GATEWAY_ADDR at it
+## consistently rather than requiring both be typed out by hand every
+## time. `make client-output OUTPUT_GATEWAY_FLAVOR=grpc` after `make
+## start OUTPUT_GATEWAY_FLAVOR=grpc`.
+client-output:
+	$(MAKE) client OUTPUT_OBSERVER=$(OUTPUT_GATEWAY_FLAVOR) OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$(OUTPUT_GATEWAY_PORT)
+
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/std.log"
 
 logs-relay:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/relay.log"
+
+logs-output:
+	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/output_gateway.log"
 
 # A starting point, not a known comfort zone — sequencer adds a real
 # hop on top of bare braft, so its own knee is somewhere at or below
