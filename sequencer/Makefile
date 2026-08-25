@@ -170,10 +170,10 @@ start:
 
 stop:
 	for h in $(NODES); do \
-		ssh $(SSH_OPTS) $(SSH_USER)@$$h "cd $(NODE_DIR) && { [ -f $(APP)_node.pid ] && kill -TERM \$$(cat $(APP)_node.pid); :; }" ; \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h "cd $(NODE_DIR) && { [ -f $(APP)_node.pid ] && kill -TERM \$$(cat $(APP)_node.pid) 2>/dev/null; :; }" ; \
 	done
-	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid); :; }"
-	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid); :; }"
+	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid) 2>/dev/null; :; }"
+	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }"
 
 ## Wipe every node's journal (run with the fleet stopped). Before a
 ## sweep meant to be reproducible from a known-empty starting point —
@@ -227,3 +227,52 @@ logs:
 
 logs-relay:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/relay.log"
+
+# A starting point, not a known comfort zone — sequencer adds a real
+# hop on top of bare braft, so its own knee is somewhere at or below
+# braft's ~160k, not necessarily the same place. Narrow or widen once
+# a first pass shows roughly where it turns (see README.md and
+# ../sweep/README.md's own "Rates are spaced tightest inside each
+# product's comfort zone and through its knee").
+SWEEP_RATES   ?= 10000 25000 40000 55000 70000 85000 100000 115000 130000 145000 160000 175000
+SWEEP_WARMUP  ?= 10
+SWEEP_MEASURE ?= 30
+SWEEP_CSV       ?= seq.csv
+SWEEP_RELAY_CSV ?= seq-relay.csv
+CHART_DIR       ?= .
+
+.PHONY: sweep sweep-relay chart chart-relay charts
+
+## Phase 1's sweep: reuses ../sweep/sweep.sh unmodified, against
+## SWEEP_RATES (override to change the range), writing SWEEP_CSV
+## (overwritten each run — rename it first if you want to keep more
+## than one). See README.md's "One sweep at a time, from a clean
+## journal" before running this against a fleet that already has
+## traffic on it.
+sweep:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_CSV)
+	../sweep/sweep.sh sequencer . "$(abspath $(SWEEP_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
+
+## Phase 3's sweep: sweep-relay.sh (this directory, not shared — see
+## its own header for why sweep.sh itself can't do this), same
+## SWEEP_RATES, writing SWEEP_RELAY_CSV.
+sweep-relay:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_RELAY_CSV)
+	./sweep-relay.sh "$(abspath $(SWEEP_RELAY_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
+		"RELAY_GRPC_ADDR=$(NODE1_PRIV):$(RELAY_GRPC_PORT)" $(SWEEP_RATES)
+
+## Regenerates knee-sequencer.svg (and knee-curves.svg, if SWEEP_CSV
+## happens to also carry aeron/braft/openraft rows) from SWEEP_CSV
+## into CHART_DIR. Needs a "sequencer" entry in ../sweep/mkcharts.py's
+## own CFG dict first — see README.md's "Generating the chart" for the
+## template; there is nothing to derive real axis ranges from before a
+## real sweep exists, so this is not done for you automatically.
+chart:
+	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(CHART_DIR)
+
+## Same, for phase 3's sweep — needs a "sequencer-relay" CFG entry.
+chart-relay:
+	python3 ../sweep/mkcharts.py $(SWEEP_RELAY_CSV) $(CHART_DIR)
+
+## Both charts in one step, once both CFG entries exist.
+charts: chart chart-relay
