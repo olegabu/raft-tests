@@ -94,7 +94,7 @@ configuration, and swept further than the shared axes show.
 
 | round trip | p50 @ 100k | p99 @ 100k | last rate with p50 < 2 ms |
 |---|---|---|---|
-| synchronous ack | 1366 µs | 4915 µs | 125k |
+| synchronous ack | 1088 µs | 4835 µs | 130k |
 | *(control)* direct to node, no gateway | *727 µs* | *2389 µs* | *250k+* |
 | relay gateway (gRPC) | **986 µs** | 2307 µs | 120k |
 | output gateway, brpc | **855 µs** | 1876 µs | 120k |
@@ -123,8 +123,9 @@ overstate:
   subscriber, while the ack has to travel back through the input
   gateway to the submitting client.
 
-The knee sits at 115-120k across the five, with the gRPC output flavor
-turning earliest. Past it latency goes to whole seconds — the panels
+The knee sits at 115-130k across the six, with the gRPC output flavor
+turning earliest and the ack path — since its gateway learned to batch
+proposals — now among the latest. Past it latency goes to whole seconds — the panels
 clip those points rather than flatten the scale everything else lives
 on. Note the p99 column is noisier than p50 and does not rank the same
 way (gRPC has both the earliest knee and the *best* p99 at 100k); one
@@ -141,34 +142,45 @@ a deployable configuration — it exists to price that hop.
 
 ![direct to node vs through the input gateway](knee-sequencer-direct.svg)
 
-| offered | through gateway | direct to node | gap |
-|---|---|---|---|
-| 10k | 539 µs | 508 µs | 31 µs |
-| 25k | 602 µs | 568 µs | 34 µs |
-| 40k | 627 µs | 610 µs | 17 µs |
-| 55k | 665 µs | 607 µs | 58 µs |
-| 70k | 810 µs | 634 µs | 176 µs |
-| 85k | 1281 µs | 659 µs | 622 µs |
-| 100k | 1366 µs | 727 µs | 639 µs |
-| 115k | 1360 µs | 739 µs | 621 µs |
-| 130k | 6039 µs | 808 µs | 5231 µs |
+| offered | before batching | batched | direct to node | gap before | gap after |
+|---|---|---|---|---|---|
+| 10k | 539 µs | 572 µs | 508 µs | 31 µs | 64 µs |
+| 25k | 602 µs | 614 µs | 568 µs | 34 µs | 46 µs |
+| 40k | 627 µs | 691 µs | 610 µs | 17 µs | 81 µs |
+| 55k | 665 µs | 751 µs | 607 µs | 58 µs | 144 µs |
+| 70k | 810 µs | 894 µs | 634 µs | 176 µs | 260 µs |
+| 85k | 1281 µs | 976 µs | 659 µs | 622 µs | 317 µs |
+| 100k | 1366 µs | 1088 µs | 727 µs | 639 µs | 361 µs |
+| 115k | 1360 µs | 1099 µs | 739 µs | 621 µs | 360 µs |
+| 125k | 1959 µs | 1248 µs | 784 µs | 1175 µs | 464 µs |
+| 130k | 6039 µs | 1430 µs | 808 µs | 5231 µs | 622 µs |
 
-(Both arms measured with the channel-caching fix below in place.)
+**The hop was never expensive per request — the gateway just ran out
+of capacity.** Below 55k it cost 17-58 µs, about right for an extra
+localhost RPC and a JSON parse. From 70k the gap exploded: a second
+knee, with the gateway saturating around 55-85k while the raft group
+behind it runs flat to ~250k.
 
-**The hop itself is nearly free; the gateway's own capacity is not.**
-Below 55k the gateway adds 17-58 µs — about what an extra localhost RPC
-and a JSON parse should cost. From 70k the gap explodes: 176 µs, then
-622 µs at 85k, and 5231 µs by 130k. That shape is not a per-request
-overhead, it is a second knee: **the input gateway saturates somewhere
-around 55-85k, while the raft group behind it does not turn until
-~250k.**
+**Batching proposals moved that knee.** The gateway now sends several
+client proposals per `ProposeBatch` RPC to the node instead of one
+`Propose` each (sequencer's `gateway/input/README.md`). At 130k the
+gap fell from 5231 µs to 622 µs and the gateway stopped collapsing —
+its knee moved out past 130k, with 145k the first rate that breaks. At
+100k, p50 went 1366 -> 1088 µs.
 
-The direct arm makes that explicit — it holds sub-millisecond to 160k
-and under 2 ms all the way to 250k, tracking bare braft's own ceiling
-(braft knees at ~250k on this fleet). So sequencer's node adds very
-little to braft: 727 µs against braft's 666 µs at 100k, for a journal
-append and an extra service layer. **What limits sequencer's ack path
-today is the input gateway, not consensus.**
+**It is a genuine trade, not a free win.** Below 70k batching is
+*worse* — 691 against 627 µs at 40k — because a batch's latency is its
+slowest member, so grouping costs something whenever the wire wasn't
+the constraint in the first place. It buys 300 µs to 4.6 ms back from
+85k up. The two bounds that control it (`--max_batch_size`,
+`--max_inflight_batches`) were swept on the fleet rather than guessed;
+see that README for the table.
+
+The direct arm still holds sub-millisecond to 160k and under 2 ms at
+250k, tracking bare braft's own ceiling (braft knees at ~250k here).
+So sequencer's node adds very little to braft — 727 µs against 666 µs
+at 100k — and **the input gateway remains the binding constraint on
+the ack path, just a much later one than before.**
 
 Two caveats on reading the direct arm, both real:
 
@@ -192,7 +204,16 @@ measuring the fix put it at ~30 µs of the ~639 µs gap at 100k (p50
 1351-1367 → 1311-1335). It shows up clearly at low rates, where it is
 most of the hop's whole cost — the 10k gap fell from 52 µs to 31 µs —
 and is lost in the noise at saturation. Worth doing, nowhere near an
-explanation for the knee. What
+explanation for the knee.
+
+Two more were tried and measured before batching was: making the
+Submit handler asynchronous instead of blocking a worker for the
+node's round trip (**flat** — 1320-1374 µs before and after), and
+raising the gateway's brpc worker count (**~10%**, and 512 workers is
+worse than 256). What finally pointed at the answer was a `perf`
+profile showing no application symbol near the top and a flat spread
+of socket syscalls, kernel spinlocks and `try_to_wake_up` — the same
+shape `gateway/output/` showed before *its* batching fix. What
 actually produces the gateway's own knee is not established here;
 profiling it the way `gateway/output/` was profiled is the obvious
 next step.

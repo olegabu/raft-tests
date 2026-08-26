@@ -178,10 +178,13 @@ CFG={
  # BURST=10 comparison run showed otherwise) is not yet established
  # here -- worth a repeat sweep with BURST set before trusting 115-130k
  # as sequencer's true ceiling rather than partly this rig's own.
- "sequencer": (200000,25000,(400,2000000),[500,1000,2000,5000,10000,50000,200000,1000000], 115000,
-              [(122000,"knee",16)],
-              "sequencer — flat to ~115k, then a severe stall",
-              "achieved plateaus at ~123-126k past the knee regardless of offered rate; p50 crosses 1s by 130k."),
+ # Re-measured after the input gateway learned to batch proposals
+ # (sequencer's gateway/input/README.md): the knee this entry used to
+ # describe at ~115k was the gateway's own, not the raft group's.
+ "sequencer": (170000,25000,(400,3000000),[500,1000,2000,5000,50000,500000,2000000], 130000,
+              [(137000,"knee",16)],
+              "sequencer — flat to ~130k once the gateway batches proposals",
+              "p50 572us at 10k to 1430us at 130k; 145k is the first rate that breaks."),
  # Three rounds of fixes, all in the relay gateway's own gRPC
  # Subscribe implementation (gateway/relay/src/relay_grpc_service_impl.hpp)
  # -- not this rig, not sequencer's consensus/ack path. (1) One
