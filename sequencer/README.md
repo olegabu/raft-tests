@@ -74,14 +74,58 @@ succeeded, and every other number in the run is meaningless) and, for
 Override anything `braft/Makefile`'s own `client:` target exposes the
 same way: `make client RATE=40000 WARMUP=5 MEASURE=15`.
 
+## Results: five round trips on one fleet
+
+Everything below comes from one `make sweep-all` followed by one
+`make charts-all`, on 4x **c7a.2xlarge** (AMD Genoa, ~3.7 GHz, 8 vCPU),
+3 nodes multi-AZ plus a colocated client, 5 s warmup / 20 s measure per
+rate.
+
+![five round trips, p50 and p99](round-trips.svg)
+
+Each panel is one hop, on identical axes. Reading them side by side:
+every gateway path sits inside the shaded sub-millisecond band through
+100k, and all five turn at essentially the same place.
+
+![the same five, p50 only](round-trips-p50.svg)
+
+| round trip | p50 @ 100k | p99 @ 100k | last rate with p50 < 2 ms |
+|---|---|---|---|
+| synchronous ack | 1373 µs | 5167 µs | 125k |
+| relay gateway (gRPC) | **986 µs** | 2307 µs | 120k |
+| output gateway, brpc | **844 µs** | 2321 µs | 125k |
+| output gateway, gRPC | **850 µs** | 1597 µs | 115k |
+| output gateway, WebSocket | **978 µs** | 4075 µs | 125k |
+
+Two things worth stating plainly, because the headline is easy to
+overstate:
+
+- **The four gateway round trips are sub-millisecond at 100k; the
+  synchronous ack path is not** (1373 µs). The ack path crosses 1 ms
+  around 70k and stays above it. It is also the only one of the five
+  that pays a full extra hop back through the input gateway.
+- **The dissemination paths are *faster* than the ack path**, which
+  looks backwards until you count hops: an output gateway tails the
+  journal colocated with the node and pushes straight to its
+  subscriber, while the ack has to travel back through the input
+  gateway to the submitting client.
+
+The knee sits at 115-125k across the five, with the gRPC output flavor
+turning earliest. Past it latency goes to whole seconds — the panels
+clip those points rather than flatten the scale everything else lives
+on. Note the p99 column is noisier than p50 and does not rank the same
+way (gRPC has both the earliest knee and the *best* p99 at 100k); one
+run per rate is not enough to separate those, so treat the p99 column
+as indicative rather than a ranking.
+
 ## Sweeping for the knee, and regenerating the chart
 
-Four targets, one per step — `sweep`/`sweep-relay` write a CSV,
-`chart`/`chart-relay` render it, `charts` does both renders in one
-step. All of them are thin wrappers (see the Makefile itself for the
-exact commands each one runs) so `make -n <target>` always shows you
-the real underlying invocation, including this section's own examples
-below.
+`make sweep-all` runs all five sweeps and `make charts-all` renders
+every chart above; the individual targets below exist for re-running
+one phase at a time. All of them are thin wrappers (see the Makefile
+itself for the exact commands each one runs) so `make -n <target>`
+always shows you the real underlying invocation, including this
+section's own examples below.
 
 ### One sweep at a time, from a clean journal
 
@@ -141,46 +185,64 @@ shape so `mkcharts.py` reads it identically. Uses the same
 `SWEEP_RATES`/`SWEEP_WARMUP`/`SWEEP_MEASURE` as `sweep`, writing
 `SWEEP_RELAY_CSV` (default `seq-relay.csv`) instead of `SWEEP_CSV`.
 
-### Generating the chart: `make chart` / `make chart-relay` / `make charts`
+### Phase 4: `make sweep-output-all`
 
 ```sh
-make chart          # SWEEP_CSV -> CHART_DIR/knee-sequencer.svg
-make chart-relay    # SWEEP_RELAY_CSV -> CHART_DIR/knee-sequencer-relay.svg
-make charts          # both
+make sweep-output-all                             # all three flavors, into seq-output.csv
+make sweep-output OUTPUT_GATEWAY_FLAVOR=grpc      # just one (its gateway must already be up)
 ```
 
-`../sweep/mkcharts.py`'s per-product chart is driven entirely by a
-`CFG` dict keyed by product name (a `"sequencer"` entry renders
-`knee-sequencer.svg` for any CSV containing `sequencer` rows,
-regardless of what else is or isn't in it — mkcharts.py skips
-whatever a CSV doesn't have rather than requiring all three original
-products present, fixed directly for this) — but there is no
-`"sequencer"`/`"sequencer-relay"` entry yet, since there's no real
-sweep to read axis ranges off of until you run one. Until you add one,
-`make chart` runs cleanly and reports `wrote 0 per-product chart(s)
-() to .` — not an error, just nothing to draw yet. Add an entry
-following the shape of the three already there once `seq.csv` exists:
+The output-gateway counterpart, via `sweep-output.sh` — same idea
+again, reading the flavor-namespaced `output_<flavor>_p50_us` labels.
+Only one output gateway can run at a time (all three flavors share
+`OUTPUT_GATEWAY_PORT` and one pidfile), so `sweep-output-all` gives
+each flavor its own full stop / `clean-data` / start cycle before
+sweeping it, and appends all three into one CSV tagged
+`product=sequencer-output-<flavor>`.
 
-```python
-# mkcharts.py's CFG dict — add after "aeron":
- "sequencer":       (200000, 25000, (Y_LOW, Y_HIGH), [tick, values, here], COMFORT_RATE,
-                     [(KNEE_RATE, "knee", 16)],
-                     "sequencer — <one-line shape, once you've seen it>",
-                     "<what the comfort-zone/knee table shows, once measured>"),
- "sequencer-relay": (200000, 25000, (Y_LOW, Y_HIGH), [tick, values, here], COMFORT_RATE,
-                     [(KNEE_RATE, "knee", 16)],
-                     "sequencer-relay — <one-line shape, once you've seen it>",
-                     "<what the comfort-zone/knee table shows, once measured>"),
+### Everything at once: `make sweep-all`
+
+```sh
+make sweep-all
 ```
 
+All five round trips — phase 1, phase 3, and phase 4's three flavors —
+from a clean journal, in one command. This is the single reproducible
+entry point behind every sequencer chart below. It is long (five full
+rate sweeps); narrow `SWEEP_RATES` for a faster pass.
+
+### Generating the charts: `make charts-all`
+
+```sh
+make charts-all     # every sequencer chart, from all three CSVs at once
+make chart          # just SWEEP_CSV        -> knee-sequencer.svg
+make chart-relay    # just SWEEP_RELAY_CSV  -> knee-sequencer-relay.svg
+make chart-output   # just SWEEP_OUTPUT_CSV -> knee-sequencer-output-*.svg
+```
+
+`../sweep/mkcharts.py` takes **any number of CSVs** — every row carries
+its own `product` column, so several sweeps' files merge into one
+dataset. That is why `charts-all` hands it all three at once rather
+than calling it three times: the two cross-round-trip charts can only
+be drawn by an invocation that sees every phase together.
+
+It writes, from a full `sweep-all`:
+
+| File | What it shows |
+|---|---|
+| `round-trips.svg` | Small multiples, one panel per round trip, each with p50 **and** p99 on identical axes. |
+| `round-trips-p50.svg` | The same five overlaid, p50 only — the "do they land on top of each other?" view. |
+| `knee-sequencer.svg` | Phase 1 alone, p50 + p99. |
+| `knee-sequencer-relay.svg` | Phase 3 alone, p50 + p99. |
+| `knee-sequencer-output-{brpc,grpc,websocket}.svg` | Each output flavor alone, p50 + p99. |
+
+Per-product axis ranges live in `mkcharts.py`'s `CFG` dict, keyed by
+product name; entries for all five sequencer products already exist.
+If you sweep a range the current axes don't cover, adjust that entry —
 `(xmax, xstep, (ylow,yhigh), yticks, comfort_rate, markers, title,
-subtitle)` — read the numbers off your own CSV by eye, the same way
-`../sweep/README.md` describes for the existing three: "read off the
-data by hand rather than fitted." Don't guess these ahead of a real
-sweep; a chart drawn from invented axis ranges is worse than no chart.
+subtitle)`, read off the data by hand rather than fitted, the same way
+`../sweep/README.md` describes for the original three.
 
-The combined `knee-curves.svg` (all products on one chart) stays
-scoped to whichever of the three original products a CSV actually
-contains — `seq.csv` on its own never contributes a fourth line to it,
-since it has no aeron/braft/openraft rows; the per-product chart above
-is sequencer's own standalone knee.
+The combined `knee-curves.svg` (aeron/braft/openraft on one chart)
+stays scoped to those three; sequencer's own comparison is
+`round-trips.svg`.

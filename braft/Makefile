@@ -148,3 +148,24 @@ logs:
 transfer-leader:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
 		"cd $(CLIENT_DIR) && ./braft_cli transfer_leader --group=Atomic --peer=$(NODE1_PRIV):$(PORT):0 --conf='$(PEERS)'"
+
+# ---------------------------------------------------------------------------
+# Rate sweep. Previously driven by invoking ../sweep/sweep.sh by hand (its own
+# header documents that form); a make target so the chart in ../README.md has a
+# single reproducible command behind it, the same way sequencer/ does.
+#
+# BURST=10 MAX_INFLIGHT=2000 are this product's own comfort-zone flags — see
+# ../README.md's comfort-zone section for why these are per-transport rather
+# than uniform. Rates are the ones the published curve was measured at.
+SWEEP_RATES   ?= 10000 25000 40000 55000 70000 85000 100000 115000 130000 145000 \
+                 150000 155000 160000 165000 170000 175000 190000 200000
+SWEEP_WARMUP  ?= 10
+SWEEP_MEASURE ?= 30
+SWEEP_CSV     ?= braft.csv
+SWEEP_FLAGS   ?= BURST=10 MAX_INFLIGHT=2000
+
+.PHONY: sweep
+sweep:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_CSV)
+	../sweep/sweep.sh braft . "$(abspath $(SWEEP_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
+		"$(SWEEP_FLAGS)" $(SWEEP_RATES)

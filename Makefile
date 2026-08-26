@@ -53,3 +53,38 @@ node-rtt:
 		echo "=== from $$host ==="; \
 		ssh $(SSH_OPTS) $(SSH_USER)@$$host "for t in $$(echo $$targets | tr ',' ' '); do ping -c 20 -q \$$t | tail -2; done" ; \
 	done
+
+# ---------------------------------------------------------------------------
+# Charts. Every chart in README.md is regenerated from the raw sweep CSVs, so
+# a reader can recheck any number and rebuild any figure. mkcharts.py takes any
+# number of CSVs (rows carry their own `product` column), which is what lets the
+# cross-round-trip comparison see all of sequencer's phases at once.
+#
+# CHART_CSVS is deliberately a wildcard over each product's own sweep output
+# plus the historical sweep/knee-sweep.csv: a product whose sweep hasn't been
+# re-run yet simply keeps its committed curve, rather than vanishing from the
+# combined chart.
+CHART_CSVS ?= sweep/knee-sweep.csv \
+              $(wildcard braft/braft.csv) $(wildcard aeron/aeron.csv) \
+              $(wildcard openraft/openraft.csv) \
+              $(wildcard sequencer/seq.csv) $(wildcard sequencer/seq-relay.csv) \
+              $(wildcard sequencer/seq-output.csv)
+
+.PHONY: charts sweep-products
+charts:
+	python3 sweep/mkcharts.py $(CHART_CSVS) .
+
+## Re-run all three non-sequencer products' sweeps, in sequence — they share
+## one fleet, so they cannot overlap. Each brings its own cluster up first.
+## sequencer/ has its own `make sweep-all` (five round trips) — deliberately
+## separate, since it is the only product with more than one.
+sweep-products:
+	$(MAKE) -C braft push start
+	sleep 5
+	$(MAKE) -C braft sweep
+	$(MAKE) -C openraft push start
+	sleep 5
+	$(MAKE) -C openraft sweep
+	$(MAKE) -C aeron push start
+	sleep 10
+	$(MAKE) -C aeron sweep

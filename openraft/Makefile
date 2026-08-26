@@ -108,3 +108,19 @@ client:
 
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/std.log"
+
+# ---------------------------------------------------------------------------
+# Rate sweep — see braft/Makefile's own sweep target comment. MAX_INFLIGHT=400
+# is this product's comfort-zone flag (../README.md's comfort-zone section).
+SWEEP_RATES   ?= 10000 20000 30000 40000 50000 55000 60000 70000 75000 85000 \
+                 92000 100000 110000 120000 130000 140000
+SWEEP_WARMUP  ?= 10
+SWEEP_MEASURE ?= 30
+SWEEP_CSV     ?= openraft.csv
+SWEEP_FLAGS   ?= MAX_INFLIGHT=400
+
+.PHONY: sweep
+sweep:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_CSV)
+	../sweep/sweep.sh openraft . "$(abspath $(SWEEP_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
+		"$(SWEEP_FLAGS)" $(SWEEP_RATES)

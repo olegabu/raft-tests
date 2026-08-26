@@ -1,18 +1,40 @@
 import csv, math, os, sys
 
-# Renders the four knee charts in the repo root from a sweep CSV.
-#   python3 sweep/mkcharts.py [sweep/knee-sweep.csv] [output-dir]
+# Renders the knee charts in the repo root from one or more sweep CSVs.
+#   python3 sweep/mkcharts.py [sweep.csv ...] [output-dir]
+#
+# Any number of CSVs may be passed: every row carries its own
+# `product` column, so several sweeps' files merge cleanly into one
+# dataset. That is what the cross-round-trip comparison chart needs —
+# sequencer's five round trips are written by three different sweep
+# scripts into three different CSVs (phase 1, phase 3, phase 4's three
+# flavors), and only an invocation that sees all of them at once can
+# draw them on shared axes. Arguments ending in .csv are inputs; a
+# non-.csv argument is the output directory, so the original
+# `mkcharts.py <csv> <dir>` form keeps working unchanged.
 HERE = os.path.dirname(os.path.abspath(__file__))
-CSV  = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "knee-sweep.csv")
-OUT  = sys.argv[2] if len(sys.argv) > 2 else os.path.dirname(HERE)
+_args = sys.argv[1:]
+CSVS = [a for a in _args if a.endswith(".csv")] or [os.path.join(HERE, "knee-sweep.csv")]
+_dirs = [a for a in _args if not a.endswith(".csv")]
+OUT  = _dirs[0] if _dirs else os.path.dirname(HERE)
 os.makedirs(OUT, exist_ok=True)
 
 SURF,INK,INK2,MUTED,GRID,AXIS = "#fcfcfb","#0b0b0b","#52514e","#898781","#e1e0d9","#c3c2b7"
 BAND = "#f0efec"
 C1,C2,C3 = "#2a78d6","#eb6834","#1baf7a"
+# Two more categorical slots, for the five-round-trip comparison only.
+# Checked as a five-colour set against *every* pair, not just adjacent
+# ones — a five-series overlay puts all of them side by side, so
+# adjacent-only is the wrong test. The first attempt here paired an
+# orange (#c2410c) with C2 and a violet (#8b5cf6) with C1: both failed,
+# the oranges at ΔE 11.8 for normal vision (below the 15 floor —
+# genuinely hard to tell apart with full colour vision, not just a CVD
+# concern) and the violet/blue at ΔE 4.8 deutan. These two clear all
+# pairs in all three CVD models.
+C4,C5 = "#b5179e","#6d28d9"
 FONT = 'system-ui,-apple-system,"Segoe UI",sans-serif'
 
-rows=[r for r in csv.DictReader(open(CSV))]
+rows=[r for path in CSVS for r in csv.DictReader(open(path))]
 # A rate may appear more than once: repeats are how run-to-run spread gets
 # measured near the knee, where a single run says very little. Average them.
 _acc={}
@@ -172,6 +194,30 @@ CFG={
                      [(112000,"ceiling",16)],
                      "sequencer-relay — sub-2ms through 100k, but a lower ceiling than the old design",
                      "p50 649us-1.3ms from 10k to 100k, beating phase 1's own ack latency; cliff moved from 130k to 115k."),
+ # Phase 4, one entry per transport flavor (sequencer's
+ # raft-tests/sequencer/sweep-output.sh writes product=
+ # sequencer-output-<flavor>). All three were rebuilt on the
+ # per-subscriber BroadcastRing design — see sequencer's own
+ # gateway/output/README.md — which is what moved them from ~4.2-4.9ms
+ # p50 at 100k to ~890us, i.e. onto the relay's own curve rather than
+ # 3.5x above it. Same axes for all three on purpose: the whole point
+ # of charting them separately is that they are now hard to tell
+ # apart, and shared axes are what makes that visible.
+ "sequencer-output-brpc": (140000,25000,(500,100000),
+                     [500,1000,2000,5000,10000,50000,100000], 120000,
+                     [(122000,"knee",16)],
+                     "sequencer-output-brpc — brpc Streaming RPC, sub-1ms to 100k",
+                     "Per-subscriber ring readers; p50 tracks the relay's own curve to the same 120k ceiling."),
+ "sequencer-output-grpc": (140000,25000,(500,100000),
+                     [500,1000,2000,5000,10000,50000,100000], 120000,
+                     [(122000,"knee",16)],
+                     "sequencer-output-grpc — real gRPC streaming, sub-1ms to 100k",
+                     "The synchronous gRPC API's thread-per-Subscribe is the per-subscriber reader here."),
+ "sequencer-output-websocket": (140000,25000,(500,100000),
+                     [500,1000,2000,5000,10000,50000,100000], 120000,
+                     [(122000,"knee",16)],
+                     "sequencer-output-websocket — Boost.Beast WebSocket, sub-1ms to 100k",
+                     "Each connection's stream is owned outright by its writer thread, not posted to a shared io thread."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:
@@ -205,6 +251,118 @@ for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     legend(o,L,H,[("p50",C1),("p99",C2)])
     o.append('</svg>')
     open(f"{OUT}/knee-{name}.svg","w").write("\n".join(o))
+
+# ---------- sequencer's five round trips: small multiples, p50 + p99 ----------
+# One panel per round trip rather than ten lines on shared axes: five
+# products x two percentiles is past the point where a single overlay
+# stays readable, and the interesting comparison here is panel-to-panel
+# shape, which identical axes make direct. The p50-only overlay below
+# is the other half — it answers "do they land on top of each other?",
+# which is exactly the question the small multiples make hard to eyeball.
+RT = [("sequencer",                   "synchronous ack", C1),
+      ("sequencer-relay",             "relay (gRPC)",    C2),
+      ("sequencer-output-brpc",       "output: brpc",    C3),
+      ("sequencer-output-grpc",       "output: gRPC",    C4),
+      ("sequencer-output-websocket",  "output: WebSocket", C5)]
+rt_present = [(n,lab,c) for n,lab,c in RT if n in D]
+if len(rt_present) >= 2:
+    COLS,ROWS = 3,2
+    PANW,PANH = 268,196
+    GX,GY = 26,58
+    ML,MT = 62,104
+    W = ML + COLS*PANW + (COLS-1)*GX + 24
+    # Bottom margin has to clear the last row's tick labels before the
+    # x-axis caption; with 5 panels in a 3x2 grid the caption would
+    # otherwise land inside panel 5 rather than under the grid.
+    H = MT + ROWS*PANH + (ROWS-1)*GY + 86
+    XMAX,XSTEP = 130000,50000
+    YR = (500.0, 200000.0)
+    ylo,yhi = math.log10(YR[0]), math.log10(YR[1])
+    o = head(W,H,"sequencer: five round trips, p50 and p99",
+      ["Every hop this repo measures, same fleet and same sweep. Identical axes across panels; log latency scale.",
+       "Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.",
+       "Past the knee, latency runs to whole seconds; those points clip at the panel top."])
+    # Each panel clips its own series: past the knee p50 reaches
+    # ~1-2 seconds, and stretching the axis to contain that would
+    # squeeze the 500us-2ms range this chart exists to show into a
+    # few pixels. Clipping keeps the resolution where the story is;
+    # the near-vertical climb into the clip is itself the signal.
+    o.append('<defs>')
+    for i in range(len(rt_present)):
+        r,c = divmod(i, COLS)
+        L = ML + c*(PANW+GX)
+        T = MT + r*(PANH+GY)
+        o.append(f'<clipPath id="pan{i}"><rect x="{L-6}" y="{T-6}" width="{PANW+12}" height="{PANH+12}"/></clipPath>')
+    o.append('</defs>')
+    for i,(name,label,_col) in enumerate(rt_present):
+        r,c = divmod(i, COLS)
+        L = ML + c*(PANW+GX)
+        T = MT + r*(PANH+GY)
+        xm = lambda v,L=L: L+PANW*(v/XMAX)
+        ym = lambda v,T=T: T+PANH*(1-(math.log10(v)-ylo)/(yhi-ylo))
+        # The sub-millisecond band is the whole point of this round of
+        # work, so it is drawn rather than left to the reader's eye.
+        y1ms = ym(1000)
+        o.append(f'<rect x="{L}" y="{y1ms:.1f}" width="{PANW}" height="{T+PANH-y1ms:.1f}" fill="{BAND}"/>')
+        for v in [1000,10000,100000]:
+            yy=ym(v)
+            o.append(f'<line x1="{L}" y1="{yy:.1f}" x2="{L+PANW}" y2="{yy:.1f}" stroke="{GRID}" stroke-width="1"/>')
+            if c==0:
+                lab = f"{v//1000} ms" if v>=1000 else f"{v} µs"
+                o.append(f'<text x="{L-8}" y="{yy+4:.1f}" font-size="10" fill="{MUTED}" text-anchor="end">{lab}</text>')
+        o.append(f'<line x1="{L}" y1="{T+PANH}" x2="{L+PANW}" y2="{T+PANH}" stroke="{AXIS}" stroke-width="1"/>')
+        v=0
+        while v<=XMAX:
+            xx=xm(v)
+            o.append(f'<line x1="{xx:.1f}" y1="{T+PANH}" x2="{xx:.1f}" y2="{T+PANH+4}" stroke="{AXIS}" stroke-width="1"/>')
+            o.append(f'<text x="{xx:.1f}" y="{T+PANH+17}" font-size="10" fill="{MUTED}" text-anchor="middle">{v//1000}k</text>')
+            v+=XSTEP
+        o.append(f'<text x="{L}" y="{T-8}" font-size="12" font-weight="600" fill="{INK}">{label}</text>')
+        o.append(f'<g clip-path="url(#pan{i})">')
+        for key,col in (("p99",C2),("p50",C1)):
+            pts=[p for p in D[name] if p[key]>0]
+            if pts:
+                series(o,pts,col,xm,ym,key)
+        o.append('</g>')
+    _ymid = MT + (ROWS*PANH + (ROWS-1)*GY)/2
+    o.append(f'<text x="20" y="{_ymid:.0f}" font-size="11" fill="{INK2}" text-anchor="middle" '
+             f'transform="rotate(-90 20 {_ymid:.0f})">latency, log scale</text>')
+    o.append(f'<text x="{ML+ (COLS*PANW+(COLS-1)*GX)/2:.0f}" y="{H-46}" font-size="11" fill="{INK2}" '
+             f'text-anchor="middle">offered rate (requests/sec)</text>')
+    legend(o,ML,H,[("p50",C1),("p99",C2)])
+    o.append('</svg>')
+    open(f"{OUT}/round-trips.svg","w").write("\n".join(o))
+
+    # ---------- the same five, p50 only, overlaid ----------
+    W,H,L,R,T,B = 900,470,78,40,96,74
+    PW,PH = W-L-R,H-T-B
+    XMAX = 130000
+    ylo,yhi = math.log10(600.0), math.log10(200000.0)
+    xm = lambda v: L+PW*(v/XMAX)
+    ym = lambda v: T+PH*(1-(math.log10(v)-ylo)/(yhi-ylo))
+    o = head(W,H,"sequencer: every gateway round trip is sub-millisecond at 100k — the ack path is not",
+      ["p50 latency vs offered rate, same fleet and sweep as the panels above. Log latency scale.",
+       "At 100k: relay 986 µs, output brpc 844 / gRPC 850 / WebSocket 978 µs; synchronous ack 1373 µs.",
+       "Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms."])
+    y1ms = ym(1000)
+    o.append(f'<rect x="{L}" y="{y1ms:.1f}" width="{PW}" height="{T+PH-y1ms:.1f}" fill="{BAND}"/>')
+    o.append(f'<text x="{L+8}" y="{y1ms+15:.1f}" font-size="11" fill="{MUTED}">at or below 1 ms</text>')
+    axes(o,L,T,PW,PH,XMAX,25000,[1000,2000,5000,10000,50000,200000],"p50 latency, log scale",ym,
+         lambda v: f"{v//1000} ms" if v>=1000 else f"{v} µs")
+    # Legend only, no direct line-end labels: every series collapses
+    # past its knee, so all five line-ends pile into the top-right
+    # corner where labels would overlap each other rather than
+    # identify anything. (The small-multiples chart above is where
+    # per-series identity is unambiguous by construction.)
+    for _i,(name,_label,col) in enumerate(rt_present):
+        pts=[p for p in D[name] if p["p50"]>0]
+        if not pts: continue
+        series(o,pts,col,xm,ym,"p50")
+    legend(o,L,H,[(lab,col) for _n,lab,col in rt_present])
+    o.append('</svg>')
+    open(f"{OUT}/round-trips-p50.svg","w").write("\n".join(o))
+
 _written = [n for n in CFG if n in D]
 _combined = "knee-curves.svg and " if present else ""
-print(f"wrote {_combined}{len(_written)} per-product chart(s) ({', '.join(_written)}) to {OUT}")
+_rt = f", round-trips.svg + round-trips-p50.svg ({len(rt_present)} round trips)" if len(rt_present)>=2 else ""
+print(f"wrote {_combined}{len(_written)} per-product chart(s) ({', '.join(_written)}){_rt} to {OUT}")

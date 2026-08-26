@@ -192,3 +192,20 @@ client:
 
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/std.log"
+
+# ---------------------------------------------------------------------------
+# Rate sweep — see braft/Makefile's own sweep target comment. BURST=10
+# MAX_INFLIGHT=1000 are this product's comfort-zone flags, and its rate list
+# runs far higher than the raft products' because its knee is ~400k.
+SWEEP_RATES   ?= 25000 50000 100000 140000 175000 210000 250000 290000 325000 \
+                 360000 400000 460000 520000 580000 640000
+SWEEP_WARMUP  ?= 10
+SWEEP_MEASURE ?= 30
+SWEEP_CSV     ?= aeron.csv
+SWEEP_FLAGS   ?= BURST=10 MAX_INFLIGHT=1000
+
+.PHONY: sweep
+sweep:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_CSV)
+	../sweep/sweep.sh aeron . "$(abspath $(SWEEP_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
+		"$(SWEEP_FLAGS)" $(SWEEP_RATES)

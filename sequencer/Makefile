@@ -323,9 +323,14 @@ SWEEP_WARMUP  ?= 10
 SWEEP_MEASURE ?= 30
 SWEEP_CSV       ?= seq.csv
 SWEEP_RELAY_CSV ?= seq-relay.csv
+# Phase 4: all three output-gateway flavors land in ONE csv (rows are
+# tagged product=sequencer-output-<flavor>), because the interesting
+# comparison is across flavors — see `sweep-output-all` below.
+SWEEP_OUTPUT_CSV ?= seq-output.csv
 CHART_DIR       ?= .
 
-.PHONY: sweep sweep-relay chart chart-relay charts
+.PHONY: sweep sweep-relay sweep-output sweep-output-all sweep-all \
+        chart chart-relay chart-output charts charts-all
 
 ## Phase 1's sweep: reuses ../sweep/sweep.sh unmodified, against
 ## SWEEP_RATES (override to change the range), writing SWEEP_CSV
@@ -345,6 +350,51 @@ sweep-relay:
 	./sweep-relay.sh "$(abspath $(SWEEP_RELAY_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
 		"RELAY_GRPC_ADDR=$(NODE1_PRIV):$(RELAY_GRPC_PORT)" $(SWEEP_RATES)
 
+## Phase 4's sweep, one flavor. Requires that flavor's gateway to
+## already be up (`make start OUTPUT_GATEWAY_FLAVOR=<flavor>`) —
+## sweep-output-all below does that part for you.
+sweep-output:
+	@test -n "$(OUTPUT_GATEWAY_FLAVOR)" || \
+		{ echo "sweep-output: set OUTPUT_GATEWAY_FLAVOR=grpc|brpc|websocket" >&2; exit 1; }
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_OUTPUT_CSV)
+	./sweep-output.sh $(OUTPUT_GATEWAY_FLAVOR) "$(abspath $(SWEEP_OUTPUT_CSV))" \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) \
+		"OUTPUT_OBSERVER=$(OUTPUT_GATEWAY_FLAVOR) OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$(OUTPUT_GATEWAY_PORT)" \
+		$(SWEEP_RATES)
+
+## All three flavors, appended into one CSV. Only one output gateway
+## can run at a time (they share OUTPUT_GATEWAY_PORT and one pidfile —
+## see OUTPUT_GATEWAY_FLAVOR's own comment), so each flavor gets a
+## full stop/clean-data/start cycle of its own first: a fresh journal
+## per flavor is also what keeps each flavor's "achieved rate" about
+## that flavor's own traffic alone (README.md's "One sweep at a time,
+## from a clean journal").
+sweep-output-all:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_OUTPUT_CSV)
+	for f in grpc brpc websocket; do \
+		$(MAKE) stop >/dev/null 2>&1 || true; \
+		$(MAKE) clean-data >/dev/null 2>&1; \
+		$(MAKE) start OUTPUT_GATEWAY_FLAVOR=$$f >/dev/null 2>&1; \
+		sleep 5; \
+		./sweep-output.sh $$f "$(abspath $(SWEEP_OUTPUT_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
+			"OUTPUT_OBSERVER=$$f OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$(OUTPUT_GATEWAY_PORT)" \
+			$(SWEEP_RATES) ; \
+	done
+
+## Every round trip this repo measures for sequencer, in one go:
+## phase 1 (synchronous ack), phase 3 (relay), phase 4 (all three
+## output-gateway flavors). Each phase re-cleans the journal first, so
+## this is the single reproducible entry point behind every sequencer
+## chart in README.md. Long — five full rate sweeps.
+sweep-all:
+	$(MAKE) stop >/dev/null 2>&1 || true
+	$(MAKE) clean-data
+	$(MAKE) start
+	sleep 5
+	$(MAKE) sweep
+	$(MAKE) sweep-relay
+	$(MAKE) sweep-output-all
+
 ## Regenerates knee-sequencer.svg (and knee-curves.svg, if SWEEP_CSV
 ## happens to also carry aeron/braft/openraft rows) from SWEEP_CSV
 ## into CHART_DIR. Needs a "sequencer" entry in ../sweep/mkcharts.py's
@@ -358,5 +408,16 @@ chart:
 chart-relay:
 	python3 ../sweep/mkcharts.py $(SWEEP_RELAY_CSV) $(CHART_DIR)
 
+## Same, for phase 4's three flavors.
+chart-output:
+	python3 ../sweep/mkcharts.py $(SWEEP_OUTPUT_CSV) $(CHART_DIR)
+
 ## Both charts in one step, once both CFG entries exist.
 charts: chart chart-relay
+
+## Every sequencer chart, including the cross-round-trip comparison
+## (round-trips.svg) that only exists when all five sweeps are handed
+## to mkcharts.py together — hence one invocation with every CSV,
+## rather than `charts chart-output`.
+charts-all:
+	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(SWEEP_RELAY_CSV) $(SWEEP_OUTPUT_CSV) $(CHART_DIR)
