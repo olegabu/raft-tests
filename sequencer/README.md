@@ -84,14 +84,18 @@ rate.
 ![five round trips, p50 and p99](round-trips.svg)
 
 Each panel is one hop, on identical axes. Reading them side by side:
-every gateway path sits inside the shaded sub-millisecond band through
-100k, and all five turn at essentially the same place.
+every dissemination path sits inside the shaded sub-millisecond band
+through 100k, and they turn at essentially the same place. The
+"direct to node" panel is the control arm described in [What the input
+gateway costs](#what-the-input-gateway-costs) — not a deployable
+configuration, and swept further than the shared axes show.
 
 ![the same five, p50 only](round-trips-p50.svg)
 
 | round trip | p50 @ 100k | p99 @ 100k | last rate with p50 < 2 ms |
 |---|---|---|---|
-| synchronous ack | 1373 µs | 5167 µs | 125k |
+| synchronous ack | 1366 µs | 4915 µs | 125k |
+| *(control)* direct to node, no gateway | *727 µs* | *2389 µs* | *250k+* |
 | relay gateway (gRPC) | **986 µs** | 2307 µs | 120k |
 | output gateway, brpc | **855 µs** | 1876 µs | 120k |
 | output gateway, gRPC | **864 µs** | 1785 µs | 115k |
@@ -110,7 +114,7 @@ Two things worth stating plainly, because the headline is easy to
 overstate:
 
 - **The four gateway round trips are sub-millisecond at 100k; the
-  synchronous ack path is not** (1373 µs). The ack path crosses 1 ms
+  synchronous ack path is not** (1366 µs). The ack path crosses 1 ms
   around 70k and stays above it. It is also the only one of the five
   that pays a full extra hop back through the input gateway.
 - **The dissemination paths are *faster* than the ack path**, which
@@ -126,6 +130,72 @@ on. Note the p99 column is noisier than p50 and does not rank the same
 way (gRPC has both the earliest knee and the *best* p99 at 100k); one
 run per rate is not enough to separate those, so treat the p99 column
 as indicative rather than a ranking.
+
+## What the input gateway costs
+
+Every number above submits through the input gateway, the path
+specification.md §3.3 requires of a real deployment: client → input
+gateway → node's `ProposeService` → back. `make client-direct` runs
+the same rig against a node's `ProposeService` directly, which is not
+a deployable configuration — it exists to price that hop.
+
+![direct to node vs through the input gateway](knee-sequencer-direct.svg)
+
+| offered | through gateway | direct to node | gap |
+|---|---|---|---|
+| 10k | 539 µs | 508 µs | 31 µs |
+| 25k | 602 µs | 568 µs | 34 µs |
+| 40k | 627 µs | 610 µs | 17 µs |
+| 55k | 665 µs | 607 µs | 58 µs |
+| 70k | 810 µs | 634 µs | 176 µs |
+| 85k | 1281 µs | 659 µs | 622 µs |
+| 100k | 1366 µs | 727 µs | 639 µs |
+| 115k | 1360 µs | 739 µs | 621 µs |
+| 130k | 6039 µs | 808 µs | 5231 µs |
+
+(Both arms measured with the channel-caching fix below in place.)
+
+**The hop itself is nearly free; the gateway's own capacity is not.**
+Below 55k the gateway adds 17-58 µs — about what an extra localhost RPC
+and a JSON parse should cost. From 70k the gap explodes: 176 µs, then
+622 µs at 85k, and 5231 µs by 130k. That shape is not a per-request
+overhead, it is a second knee: **the input gateway saturates somewhere
+around 55-85k, while the raft group behind it does not turn until
+~250k.**
+
+The direct arm makes that explicit — it holds sub-millisecond to 160k
+and under 2 ms all the way to 250k, tracking bare braft's own ceiling
+(braft knees at ~250k on this fleet). So sequencer's node adds very
+little to braft: 727 µs against braft's 666 µs at 100k, for a journal
+append and an extra service layer. **What limits sequencer's ack path
+today is the input gateway, not consensus.**
+
+Two caveats on reading the direct arm, both real:
+
+- It skips more than the network hop. It also skips
+  `CounterInputCodec::toInput`'s JSON parse (the 8-byte input is built
+  client-side, since `ProposeRequest` carries raw bytes). A deployment
+  cannot skip either of those — something has to turn a client's wire
+  format into an input.
+- Its flags differ from `braft/`'s own sweep (`BURST=1` here versus
+  `BURST=10` there), and the root README documents that burst shape
+  inflating low-rate latency. Do not read "direct beats braft at 10k"
+  (508 µs vs 641 µs) as sequencer outperforming what it is built on;
+  that comparison needs matching burst settings before it means
+  anything.
+
+**One thing that was investigated and turned out not to be the
+cause.** `NodeProposer::propose()` built a fresh `brpc::Channel` on
+every request rather than reusing one. That is genuinely wrong —
+channels are meant to be long-lived and shared — and it was fixed, but
+measuring the fix put it at ~30 µs of the ~639 µs gap at 100k (p50
+1351-1367 → 1311-1335). It shows up clearly at low rates, where it is
+most of the hop's whole cost — the 10k gap fell from 52 µs to 31 µs —
+and is lost in the noise at saturation. Worth doing, nowhere near an
+explanation for the knee. What
+actually produces the gateway's own knee is not established here;
+profiling it the way `gateway/output/` was profiled is the obvious
+next step.
 
 ## Sweeping for the knee, and regenerating the chart
 
@@ -178,6 +248,16 @@ widen it once a first pass shows roughly where it turns (see
 `../sweep/README.md`'s own "Rates are spaced tightest inside each
 product's comfort zone and through its knee" for why the spacing
 matters more than the exact endpoints).
+
+### The control arm: `make sweep-direct`
+
+```sh
+make client-direct              # one run, straight to NODE1's ProposeService
+make sweep-direct               # the same sweep, into seq-direct.csv
+```
+
+Writes rows tagged `product=sequencer-direct`. See "What the input
+gateway costs" above for what this arm does and does not skip.
 
 ### Phase 3: `make sweep-relay`
 

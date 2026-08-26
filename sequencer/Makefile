@@ -296,13 +296,27 @@ OUTPUT_FLAG = $(if $(OUTPUT_OBSERVER),--output_observer=$(OUTPUT_OBSERVER) --out
 ## --drain_timeout/--pace/--hdr_out), so sweep.sh needs no per-product
 ## awareness of the difference — see sequencer's own
 ## bench/load_generator/README.md for why.
+# Empty (the default): submit through the input gateway, the real
+# deployment path (specification.md §3.3). Set to bypass it and call a
+# node's own ProposeService directly — the control arm for "what does
+# that hop cost?". See sequencer's examples/counter/load_generator_main.cpp
+# (ProposeRequester) for the three things the direct arm skips, only
+# one of which a deployment could actually skip too.
+NODE_ADDR ?=
+SUBMIT_TARGET_FLAG = $(if $(NODE_ADDR),--node_addr=$(NODE_ADDR),--input_gateway_addr=127.0.0.1:$(INPUT_GATEWAY_PORT))
+
 client:
 	ssh -t $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
-		"cd $(CLIENT_DIR) && ./$(APP)_load_generator --input_gateway_addr=127.0.0.1:$(INPUT_GATEWAY_PORT) \
+		"cd $(CLIENT_DIR) && ./$(APP)_load_generator $(SUBMIT_TARGET_FLAG) \
 			--mode $(MODE) --pace $(PACE) \
 			--thread_num $(THREADS) $(OPEN_FLAGS) \
 			--warmup $(WARMUP) --measure $(MEASURE) \
 			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) $(RELAY_FLAG) $(OUTPUT_FLAG) --logtostderr"
+
+## The direct-to-node arm: same rig, same rates, but submitting to
+## NODE1's ProposeService instead of through the input gateway.
+client-direct:
+	$(MAKE) client NODE_ADDR=$(NODE1_PRIV):$(PORT)
 
 ## Convenience alias for `make client` with RELAY_GRPC_ADDR already
 ## pointed at the relay `start` brought up on NODE1 — see RELAY_FLAG's
@@ -339,6 +353,7 @@ SWEEP_RATES   ?= 10000 25000 40000 55000 70000 85000 100000 115000 130000 145000
 SWEEP_WARMUP  ?= 10
 SWEEP_MEASURE ?= 30
 SWEEP_CSV       ?= seq.csv
+SWEEP_DIRECT_CSV ?= seq-direct.csv
 SWEEP_RELAY_CSV ?= seq-relay.csv
 # Phase 4: all three output-gateway flavors land in ONE csv (rows are
 # tagged product=sequencer-output-<flavor>), because the interesting
@@ -346,7 +361,7 @@ SWEEP_RELAY_CSV ?= seq-relay.csv
 SWEEP_OUTPUT_CSV ?= seq-output.csv
 CHART_DIR       ?= .
 
-.PHONY: sweep sweep-relay sweep-output sweep-output-all sweep-all \
+.PHONY: sweep sweep-direct sweep-relay sweep-output sweep-output-all sweep-all \
         chart chart-relay chart-output charts charts-all
 
 ## Phase 1's sweep: reuses ../sweep/sweep.sh unmodified, against
@@ -358,6 +373,14 @@ CHART_DIR       ?= .
 sweep:
 	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_CSV)
 	../sweep/sweep.sh sequencer . "$(abspath $(SWEEP_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
+
+## The same sweep, submitting straight to a node's ProposeService
+## instead of through the input gateway — the control arm that prices
+## that hop. Rows are tagged product=sequencer-direct.
+sweep-direct:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_DIRECT_CSV)
+	../sweep/sweep.sh sequencer-direct . "$(abspath $(SWEEP_DIRECT_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
+		"NODE_ADDR=$(NODE1_PRIV):$(PORT)" $(SWEEP_RATES)
 
 ## Phase 3's sweep: sweep-relay.sh (this directory, not shared — see
 ## its own header for why sweep.sh itself can't do this), same
@@ -441,4 +464,5 @@ charts: chart chart-relay
 ## to mkcharts.py together — hence one invocation with every CSV,
 ## rather than `charts chart-output`.
 charts-all:
-	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(SWEEP_RELAY_CSV) $(SWEEP_OUTPUT_CSV) $(CHART_DIR)
+	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(SWEEP_DIRECT_CSV) $(SWEEP_RELAY_CSV) \
+		$(SWEEP_OUTPUT_CSV) $(CHART_DIR)

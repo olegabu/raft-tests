@@ -213,6 +213,18 @@ CFG={
                      [(112000,"ceiling",16)],
                      "sequencer-relay — sub-2ms through 100k, but a lower ceiling than the old design",
                      "p50 649us-1.3ms from 10k to 100k, beating phase 1's own ack latency; cliff moved from 130k to 115k."),
+ # The control arm for the input gateway's cost: same rig, same rates,
+ # but calling a node's ProposeService directly. Not a deployable
+ # configuration (specification.md §3.3 has clients submit through a
+ # gateway) — it exists to price that hop.
+ # No knee inside the swept range — hence no dashed rule and a comfort
+ # band running the whole width. Axes sized to the data (p99 tops out
+ # near 8.5ms) rather than to a collapse that never happens.
+ "sequencer-direct": (260000,50000,(400,12000),
+                     [500,700,1000,2000,3000,5000,10000], 250000,
+                     [],
+                     "sequencer-direct — submitting straight to the node, no input gateway",
+                     "p50 508us at 10k to 727us at 100k, still 1.6ms at 250k; the gateway arm knees at ~55-70k."),
  # Phase 4, one entry per transport flavor (sequencer's
  # raft-tests/sequencer/sweep-output.sh writes product=
  # sequencer-output-<flavor>). All three were rebuilt on the
@@ -262,10 +274,20 @@ for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
         o.append(f'<text x="{kx+6:.1f}" y="{T+mdy}" font-size="11" font-weight="600" '
                  f'fill="{INK2}">{mlabel}</text>')
     axes(o,L,T,PW,PH,xmax,xstep,yticks,"latency (µs), log scale",ym,lambda v: f"{v:,}")
+    # Clip to the plot area. Past a product's knee, and at any rate
+    # where a repeated run happened to be rig-limited (repeats are
+    # averaged — see sweep/README.md), a point can land far above the
+    # range the rest of the curve needs; without clipping it drags a
+    # line across the title instead of just leaving the top edge.
+    o.append(f'<defs><clipPath id="plot"><rect x="{L-6}" y="{T-6}" width="{PW+12}" height="{PH+12}"/></clipPath></defs>')
+    o.append('<g clip-path="url(#plot)">')
     for key,col in (("p99",C2),("p50",C1)):
         series(o,D[name],col,xm,ym,key)
+    o.append('</g>')
+    for key,col in (("p99",C2),("p50",C1)):
         last=D[name][-1]
-        o.append(f'<text x="{xm(last["rate"])+12:.1f}" y="{ym(last[key])+4:.1f}" font-size="12" '
+        ylab_pos=min(max(ym(last[key]), T), T+PH)
+        o.append(f'<text x="{xm(last["rate"])+12:.1f}" y="{ylab_pos+4:.1f}" font-size="12" '
                  f'font-weight="600" fill="{INK}">{key}</text>')
     legend(o,L,H,[("p50",C1),("p99",C2)])
     o.append('</svg>')
@@ -279,6 +301,7 @@ for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
 # is the other half — it answers "do they land on top of each other?",
 # which is exactly the question the small multiples make hard to eyeball.
 RT = [("sequencer",                   "synchronous ack", C1),
+      ("sequencer-direct",            "direct to node",  C4),
       ("sequencer-relay",             "relay (gRPC)",    C2),
       ("sequencer-output-brpc",       "output: brpc",    C3),
       ("sequencer-output-grpc",       "output: gRPC",    C4),
@@ -297,10 +320,12 @@ if len(rt_present) >= 2:
     XMAX,XSTEP = 130000,50000
     YR = (500.0, 200000.0)
     ylo,yhi = math.log10(YR[0]), math.log10(YR[1])
-    o = head(W,H,"sequencer: five round trips, p50 and p99",
+    _n = {2:"two",3:"three",4:"four",5:"five",6:"six"}.get(len(rt_present), str(len(rt_present)))
+    o = head(W,H,f"sequencer: {_n} round trips, p50 and p99",
       ["Every hop this repo measures, same fleet and same sweep. Identical axes across panels; log latency scale.",
        "Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.",
-       "Past the knee, latency runs to whole seconds; those points clip at the panel top."])
+       "Past the knee, latency runs to whole seconds; those points clip at the panel top. "
+       "The direct-to-node arm was swept further than shown \u2014 see its own chart."])
     # Each panel clips its own series: past the knee p50 reaches
     # ~1-2 seconds, and stretching the axis to contain that would
     # squeeze the 500us-2ms range this chart exists to show into a
