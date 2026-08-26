@@ -114,6 +114,15 @@ OUTPUT_TUNING_FLAGS = $(OUTPUT_RING_SLOTS_FLAG) $(OUTPUT_IDLE_SPIN_FLAG)
 # Propose"). See sequencer's own bench/load_generator/README.md for
 # the other two round trips this repo's own README asks every product
 # to report, and why they need a different rig than this one.
+# brpc's own gflags on the input gateway process. The node gets
+# SERVER_CONCURRENCY/EVENT_DISPATCHERS above; the gateway historically
+# got nothing, i.e. brpc's defaults. Exposed because the gateway's
+# Submit handler blocks a bthread for a full node round trip per
+# request (gateway/input/src/submit_service_impl.hpp), which makes its
+# concurrency ceiling a plausible throughput limit worth sweeping.
+INPUT_GATEWAY_CONCURRENCY ?=
+INPUT_GATEWAY_CONCURRENCY_FLAG = $(if $(INPUT_GATEWAY_CONCURRENCY),--bthread_concurrency=$(INPUT_GATEWAY_CONCURRENCY),)
+
 MODE     ?= open
 THREADS  ?= 100
 RATE     ?= 100000
@@ -223,7 +232,8 @@ start:
 		"cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }; \
 		 rm -f $(APP)_input_gateway.pid; sleep 1; \
 		 nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
-			--listen_port=$(INPUT_GATEWAY_PORT) --logtostderr --logbufsecs=0 \
+			--listen_port=$(INPUT_GATEWAY_PORT) $(INPUT_GATEWAY_CONCURRENCY_FLAG) \
+			--logtostderr --logbufsecs=0 \
 			> std.log 2>&1 < /dev/null & echo \$$! > $(APP)_input_gateway.pid"
 ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) \
