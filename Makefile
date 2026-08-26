@@ -75,16 +75,27 @@ charts:
 	python3 sweep/mkcharts.py $(CHART_CSVS) .
 
 ## Re-run all three non-sequencer products' sweeps, in sequence — they share
-## one fleet, so they cannot overlap. Each brings its own cluster up first.
-## sequencer/ has its own `make sweep-all` (five round trips) — deliberately
-## separate, since it is the only product with more than one.
+## one fleet, so they cannot overlap. Each brings its own cluster up first and
+## then WAITS for it to actually be serving before sweeping.
+##
+## That wait is not cosmetic. A sweep started while only some nodes are up
+## measures a cluster with no quorum: the first attempt at this produced a
+## 23-second p50 and 360 unsent requests at 10k, which looks like a product
+## result and is really just "one of three nodes had started." Each product's
+## check below is the cheapest thing that distinguishes the two.
 sweep-products:
 	$(MAKE) -C braft push start
-	sleep 5
+	@echo "waiting for braft quorum..."
+	@for h in $(NODE1) $(NODE2) $(NODE3); do \
+		until [ "$$(ssh $(SSH_OPTS) $(SSH_USER)@$$h 'pgrep -c atomic_server || echo 0')" != "0" ]; do sleep 2; done ; \
+	done; sleep 5
 	$(MAKE) -C braft sweep
 	$(MAKE) -C openraft push start
-	sleep 5
+	@sleep 5
+	$(MAKE) -C openraft init-cluster
+	@sleep 3
 	$(MAKE) -C openraft sweep
-	$(MAKE) -C aeron push start
-	sleep 10
+	$(MAKE) -C aeron provision push start
+	@echo "waiting for aeron cluster..."
+	@sleep 20
 	$(MAKE) -C aeron sweep
