@@ -293,11 +293,23 @@ the leader isn't measured by this tool.
 ### Instance types
 
 `deploy/main.tf` defaults both `node_instance_type` and `client_instance_type`
-to `c6i.2xlarge` (8 vCPU, no local NVMe, not network-optimized). That's the
-right default for any raft implementation being benchmarked without fsync on
-small messages — network bandwidth and packet rate aren't the bottleneck at
-that scale, so `c6in` buys nothing, and no fsync means no need for local
-NVMe. If your test needs synchronous disk writes, switch to `c6id.2xlarge` —
+to `c6i.2xlarge` (8 vCPU, no local NVMe, not network-optimized); the current
+fleet, and every number in this README's results sections, uses the
+`deploy/multi_az.tfvars` override to **`c7a.2xlarge`** — same 8 vCPU
+footprint, AMD Genoa at ~3.7 GHz. The upgrade was to per-core speed rather
+than core count because a 4-instance fleet at 8 vCPU each already sits at a
+32-vCPU on-demand quota; `c7i.8xlarge` was tried first and refused with
+`VcpuLimitExceeded`.
+
+It bought more than expected: braft's knee moved from ~160k to ~250k and
+openraft's p50 at 100k fell from 1556 to 1159 µs, on identical code. Anything
+comparing across those two fleets has to say which it means — see
+[sweep/README.md](sweep/README.md#never-mix-fleets-in-one-chart).
+
+Neither type is network-optimized, and that is deliberate: for any raft
+implementation benchmarked without fsync on small messages, network bandwidth
+and packet rate aren't the bottleneck at that scale, so `c6in` buys nothing,
+and no fsync means no need for local NVMe. If your test needs synchronous disk writes, switch to `c6id.2xlarge` —
 its instance-store NVMe is auto-mounted at `/data` by the node user-data
 script (tens of microseconds per fsync vs. 0.5–1 ms on EBS). Override either
 var with `-var` on `terraform apply`, or edit the defaults in `deploy/main.tf`.
@@ -880,100 +892,104 @@ revision of this file explained the 100k row's count as JIT warmup because it ra
 first in its sweep; the low-rate points refute that, since 25k also ran first in
 its own sweep and dropped 7.)
 
-### braft — flat to 160k, then both percentiles go together
+### braft — flat to 250k, then a cliff
 
-![braft: p50 and p99 flat together through the comfort zone to 160k, both breaking as one at the knee near 165k](knee-braft.svg)
+![braft: p50 and p99 flat together through the comfort zone to 250k, both breaking at 280k](knee-braft.svg)
 
 | offered | achieved | p50 | p99 | p99/p50 | dropped | of offered |
 |---|---|---|---|---|---|---|
-| 10k | 9,997 | 634 µs | 746 µs | 1.2x | 10 | 0.00% |
-| 25k | 24,992 | 704 µs | 949 µs | 1.3x | 10 | 0.00% |
-| 40k | 39,987 | 651 µs | 799 µs | 1.2x | 10 | 0.00% |
-| 55k | 54,983 | 660 µs | 786 µs | 1.2x | 10 | 0.00% |
-| 70k | 69,978 | 684 µs | 823 µs | 1.2x | 10 | 0.00% |
-| 85k | 84,974 | 717 µs | 882 µs | 1.2x | 10 | 0.00% |
-| 100k | 99,969 | 748 µs | 984 µs | 1.3x | 10 | 0.00% |
-| 115k | 114,964 | 819 µs | 1,312 µs | 1.6x | 10 | 0.00% |
-| 130k | 129,961 | 964 µs | 1,942 µs | 2.0x | 10 | 0.00% |
-| 145k | 144,956 | 1,282 µs | 3,029 µs | 2.4x | 10 | 0.00% |
-| 150k | 149,957 | 1,474 µs | 3,513 µs | 2.4x | 10 | 0.00% |
-| 155k | 154,975 | 1,862 µs | 5,960 µs | 3.2x | 10 | 0.00% |
-| 160k | 159,955 | 2,449 µs | 6,865 µs | 2.8x | 10 | 0.00% |
-| 165k | 164,300 | 4,437 µs | 24,811 µs | 5.6x | 26,124 | 0.53% |
-| 170k | **167,813** | 7,677 µs | 42,343 µs | 5.5x | **82,016** | 1.61% |
-| 175k | **171,955** | 8,855 µs | 13,623 µs | 1.5x | **138,558** | 2.64% |
-| 190k | **177,806** | 10,559 µs | 13,615 µs | 1.3x | **477,680** | 8.38% |
-| 200k | **177,610** | 10,511 µs | 15,575 µs | 1.5x | **863,356** | 14.39% |
+| 10k | 9,996 | 641 µs | 729 µs | 1.1x | 10 | 0.01% |
+| 25k | 24,988 | 658 µs | 757 µs | 1.2x | 10 | 0.00% |
+| 40k | 39,981 | 660 µs | 777 µs | 1.2x | 10 | 0.00% |
+| 55k | 54,974 | 641 µs | 752 µs | 1.2x | 10 | 0.00% |
+| 70k | 69,967 | 644 µs | 756 µs | 1.2x | 10 | 0.00% |
+| 85k | 84,960 | 635 µs | 748 µs | 1.2x | 10 | 0.00% |
+| 100k | 99,953 | 666 µs | 834 µs | 1.3x | 10 | 0.00% |
+| 115k | 114,947 | 682 µs | 892 µs | 1.3x | 10 | 0.00% |
+| 130k | 129,939 | 723 µs | 973 µs | 1.3x | 10 | 0.00% |
+| 145k | 144,932 | 749 µs | 1,009 µs | 1.3x | 10 | 0.00% |
+| 150k | 149,930 | 744 µs | 1,001 µs | 1.3x | 10 | 0.00% |
+| 155k | 154,927 | 756 µs | 1,028 µs | 1.4x | 10 | 0.00% |
+| 160k | 159,925 | 769 µs | 1,041 µs | 1.4x | 10 | 0.00% |
+| 165k | 164,923 | 777 µs | 1,055 µs | 1.4x | 10 | 0.00% |
+| 170k | 169,922 | 801 µs | 1,105 µs | 1.4x | 10 | 0.00% |
+| 175k | 174,918 | 813 µs | 1,509 µs | 1.9x | 10 | 0.00% |
+| 190k | 189,914 | 874 µs | 1,798 µs | 2.1x | 10 | 0.00% |
+| 200k | 199,907 | 866 µs | 1,211 µs | 1.4x | 10 | 0.00% |
+| 220k | 219,902 | 951 µs | 1,507 µs | 1.6x | 10 | 0.00% |
+| 250k | 249,891 | 1,291 µs | 2,961 µs | 2.3x | 10 | 0.00% |
+| 280k | **265,854** | 548,351 µs | 1,080,319 µs | 2.0x | **311,598** | 5.56% |
+| 310k | **259,324** | 85,311 µs | 423,935 µs | 5.0x | **1,246,795** | 20.11% |
 
-Two repeats per rate from 100k to 170k, one elsewhere. Measured with
+One run per rate, 5 s warmup / 20 s measure, on the **c7a.2xlarge**
+fleet (AMD Genoa ~3.7 GHz). Measured with
 `raft_enable_append_entries_cache=true` and `PIPELINE=8`, both this repo's
 defaults now — see
 [what fixed braft's tail](braft/README.md#what-fixed-brafts-tail-raft_enable_append_entries_cache)
 for the first and [deciding PIPELINE](braft/README.md#deciding-pipeline)
-for the second. Schedule lag stayed at 16–39 µs across every run above, so these
-are system numbers, not rig error.
+for the second. Schedule lag stayed at 17–31 µs across every healthy run, so
+these are system numbers, not rig error.
 
-Both flags changed the *shape* of this curve, not just its level, in two steps.
-Upstream (neither flag), braft had two widely separated knees — the tail turned at
-75k while p50 held to about 105k — and p99 at 100k was 6171 µs against a p50 of
-970 µs, a ratio of 8.3x. Enabling the follower cache alone (`PIPELINE` still at 4)
-brought the two together at 150–160k. Raising `PIPELINE` to 8 on top of that pushed
-the join again, to 160–165k, and made the ratio at 100k **1.3x** (748 µs / 984 µs
-here) — because the thing that had made the tail lead the median was retry
-traffic, and once pipelining stopped generating rejected RPCs there was nothing
-left to separate the two percentiles.
+**Faster cores moved the knee a long way: ~160k to ~250k.** The shape is the
+same one the earlier c6i fleet showed — p50 and p99 flat and close together
+through the comfort zone, then both breaking as one — but the flat stretch is
+now half again as long, and the whole curve sits lower: 666 µs / 834 µs
+(p50/p99) at 100k here against 748/984 on c6i. p99 stays within 1.1–1.4x of
+p50 all the way to 170k.
 
-The remaining structure is ordinary: p99 stays within 1.2–2.4x of p50 from 10k to
-150k, a **5k transition band** (160k passes, 165k fails on drops, not ratio) marks
-the knee, and past 170k the rig can no longer place the load (2.6% dropped at
-175k, 14.4% at 200k) while achieved throughput plateaus around 178k. The 165k and
-170k rows are themselves the roughest part of the whole sweep — 165k's two reps
-disagreed by 4x on p99 (10,263 µs and 39,359 µs) — consistent with a rig sitting
-exactly astride its own knee, where which side of a brief stall a run happens to
-land on dominates the result.
+The cliff itself is abrupt rather than gradual. 250k is healthy (1291 µs);
+280k collapses outright to a p50 of 548 ms with 5.6% of the offered load never
+placed, and achieved throughput plateaus around 260-266k. There is no
+intermediate regime between those two rates in this sweep — the transition
+band is somewhere inside 250-280k and was not resolved further.
 
-**One residual quirk at the very bottom, smaller than before.** p99 at 10k is
-746 µs against 949 µs at 25k — slightly backwards, and it is the `BURST=10`
-arrival shape: ten requests sharing one scheduled instant have nothing else in
-the pipeline to be absorbed by, so stragglers pay a second round trip. The effect
-was much larger when this was first isolated, before the follower cache removed
-the retries that had been amplifying it (see
-[Batching](#batching-why-aerons-open-loop-latency-was-5-too-high) above for the
-schedule-lag evidence that bounds how much of it could be rig error); it is now
-small enough to sit inside the sweep's own noise rather than being a separate
-finding to chase.
+**The flag analysis that produced those defaults was done on the c6i fleet**
+(the two-knee upstream behavior, the 8.3x p99/p50 ratio it started from, the
+step-by-step effect of the follower cache and `PIPELINE`) and has not been
+re-derived here. The conclusions are about what the flags do, not about a
+particular instance type, but the absolute numbers quoted in that analysis
+belong to the older fleet — see [sweep/README.md](sweep/README.md#never-mix-fleets-in-one-chart).
 
-### openraft — gradual, no cliff
+### openraft — gradual, no cliff, and much faster on c7a
 
-![openraft: p50 and p99 both climb steadily from the lowest rate measured, with no flat stretch and no cliff](knee-openraft.svg)
+![openraft: p50 and p99 both rising steadily from the first rate, no plateau and no cliff](knee-openraft.svg)
 
-| offered | achieved | p50 | p99 | dropped | of offered |
-|---|---|---|---|---|---|
-| 10k | 9,997 | 864 µs | 1,170 µs | 0 | 0.00% |
-| 20k | 19,994 | 927 µs | 1,313 µs | 0 | 0.00% |
-| 30k | 29,990 | 985 µs | 1,908 µs | 0 | 0.00% |
-| 40k | 39,958 | 1,024 µs | 2,295 µs | 565 | 0.05% |
-| 50k | 49,983 | 1,091 µs | 2,643 µs | 951 | 0.06% |
-| 55k | 54,942 | 1,103 µs | 2,734 µs | 1,103 | 0.07% |
-| 60k | 59,979 | 1,150 µs | 2,813 µs | 1,152 | 0.06% |
-| 70k | 69,926 | 1,220 µs | 3,131 µs | 1,411 | 0.07% |
-| 75k | 74,973 | 1,271 µs | 3,352 µs | 1,569 | 0.07% |
-| 85k | 84,903 | 1,387 µs | 4,014 µs | 2,098 | 0.08% |
-| 92k | 91,925 | 1,470 µs | 4,028 µs | 4,211 | 0.15% |
-| 100k | 99,689 | 1,556 µs | 4,669 µs | 4,902 | 0.16% |
-| 110k | **108,753** | 1,753 µs | 5,283 µs | 18,973 | 0.57% |
-| 120k | **116,976** | 1,992 µs | 5,763 µs | 41,816 | 1.16% |
-| 130k | **124,423** | 2,400 µs | 6,066 µs | 84,510 | 2.17% |
-| 140k | **127,701** | 2,713 µs | 6,299 µs | **181,325** | 4.32% |
+| offered | achieved | p50 | p99 | p99/p50 | dropped | of offered |
+|---|---|---|---|---|---|---|
+| 10k | 9,995 | 806 µs | 1,131 µs | 1.4x | 0 | 0.00% |
+| 20k | 19,991 | 817 µs | 1,180 µs | 1.4x | 0 | 0.00% |
+| 30k | 29,984 | 878 µs | 1,455 µs | 1.7x | 395 | 0.07% |
+| 40k | 39,978 | 891 µs | 1,715 µs | 1.9x | 1,146 | 0.14% |
+| 50k | 49,974 | 933 µs | 1,840 µs | 2.0x | 1,064 | 0.11% |
+| 55k | 54,971 | 920 µs | 1,875 µs | 2.0x | 1,074 | 0.10% |
+| 60k | 59,968 | 989 µs | 1,972 µs | 2.0x | 960 | 0.08% |
+| 70k | 69,962 | 997 µs | 2,123 µs | 2.1x | 1,573 | 0.11% |
+| 75k | 74,960 | 980 µs | 2,174 µs | 2.2x | 1,706 | 0.11% |
+| 85k | 84,953 | 1,037 µs | 2,447 µs | 2.4x | 2,852 | 0.17% |
+| 92k | 91,896 | 1,111 µs | 2,961 µs | 2.7x | 4,175 | 0.23% |
+| 100k | 99,756 | 1,159 µs | 3,266 µs | 2.8x | 7,092 | 0.35% |
+| 110k | 109,492 | 1,225 µs | 3,395 µs | 2.8x | 13,509 | 0.61% |
+| 120k | 119,475 | 1,304 µs | 3,389 µs | 2.6x | 15,833 | 0.66% |
+| 130k | 129,034 | 1,366 µs | 3,690 µs | 2.7x | **29,554** | 1.14% |
+| 140k | **138,264** | 1,412 µs | 3,815 µs | 2.7x | **46,179** | 1.65% |
 
 openraft has no flat stretch to find — p50 rises monotonically from the lowest
 rate measured, so its knee is a change of slope rather than a cliff, and the
-clearest signal is where drops take off: exactly zero below 40k, 0.08% of offered
-requests at 85k, 0.6% at 110k, 4.3% at 140k. Across the comfort zone the rise is close to
-linear — 7 µs of p50 and 38 µs of p99 per additional 1k requests/sec, within 75 and
-314 µs of a straight line through the endpoints — so unlike the other two there is
-no rate at which openraft is cheaper per unit of load than at any other. Every extra
-1k of throughput has a posted price.
+clearest signal is where drops take off: zero below 30k, 3.3% of offered
+requests at 85k, 11.0% at 110k, 25.0% at 140k. The rise is close to linear —
+about 4.7 µs of p50 per additional 1k requests/sec across the whole range — so
+unlike the other two there is no rate at which openraft is cheaper per unit of
+load than at any other. Every extra 1k of throughput has a posted price.
+
+**Faster cores helped openraft more than the shape suggests.** The curve is
+the same slope-without-a-cliff, but it dropped substantially: 1159 µs at 100k
+on c7a against 1556 µs on c6i, and 806 µs at 10k against 864. It also now
+reaches 140k still climbing gently (1412 µs) where the c6i fleet was already
+at 2713 µs and plateauing around 128k. The rig's own drop rate is markedly
+higher at every rate here than on c6i, though — 25% unplaced at 140k against
+4.3% — so the achieved-throughput ceiling has not moved nearly as much as the
+latency has, and openraft remains the one product whose measured ceiling is
+set by drops rather than by latency.
 
 **Past the knee, latency stops being the signal and drops become it.** braft's p50
 sits near 11 ms from 175k on, openraft's near 2.7 ms, and aeron's actually *falls*

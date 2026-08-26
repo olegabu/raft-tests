@@ -141,10 +141,14 @@ CFG={
               [(265000,"knee",16)],
               "braft — flat to 250k on c7a, then a cliff",
               "p50 641us at 10k to 1291us at 250k; 280k collapses. Earlier c6i fleet turned at ~160k."),
- "openraft": (150000,25000,(800, 7000),[1000,1500,2000,3000,5000], 85000,
-              [(110000,"knee",16)],
-              "openraft — no flat stretch; latency climbs from the first step",
-              "Latency never cliffs here; the dashed line is where drops take off instead."),
+ # Re-swept on c7a. Same shape as before — a slope, not a plateau with a
+ # cliff — but the whole curve dropped: 1159us at 100k here against
+ # ~2.7ms on the c6i fleet, and it now reaches 140k still climbing
+ # gently rather than capping out around 128k.
+ "openraft": (150000,25000,(700, 9000),[800,1000,1500,2000,3000,5000,8000], 100000,
+              [(110000,"drops climb",16)],
+              "openraft — still no cliff, but a much lower slope on c7a",
+              "Latency never cliffs; the dashed line is where the rig's own drops start climbing."),
  "aeron":    (650000,100000,(450, 1500),[500,600,700,800,1000,1200], 400000,
               [(460000,"knee",16)],
               "aeron — flat to 400k, then one step up",
