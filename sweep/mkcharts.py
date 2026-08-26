@@ -132,10 +132,15 @@ if present:
 
 # ---------- per product: p50 + p99, linear y, comfort band + knee rule ----------
 CFG={
- "braft":    (210000,25000,(400,80000),[500,700,1000,2000,3000,5000,10000,20000,50000], 160000,
-              [(165000,"knee",16)],
-              "braft — flat to 160k, then both percentiles go together",
-              "p99 holds within 1.2-2.4x of p50 from 10k to 150k, then both turn together."),
+ # Re-swept on the c7a fleet (AMD Genoa, ~3.7GHz). The knee moved a long
+ # way on faster cores: flat to 250k here, against ~160-165k on the
+ # earlier c6i fleet, so the axes had to grow with it. Do not compare
+ # these absolute values against this README's older braft prose —
+ # different hardware, see sweep/README.md's own fleet-provenance note.
+ "braft":    (320000,50000,(400,1000000),[500,700,1000,2000,5000,20000,100000,500000], 250000,
+              [(265000,"knee",16)],
+              "braft — flat to 250k on c7a, then a cliff",
+              "p50 641us at 10k to 1291us at 250k; 280k collapses. Earlier c6i fleet turned at ~160k."),
  "openraft": (150000,25000,(800, 7000),[1000,1500,2000,3000,5000], 85000,
               [(110000,"knee",16)],
               "openraft — no flat stretch; latency climbs from the first step",

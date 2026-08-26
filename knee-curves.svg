@@ -30,65 +30,30 @@
 <line x1="698.3" y1="426" x2="698.3" y2="431" stroke="#c3c2b7" stroke-width="1"/>
 <text x="698.3" y="446" font-size="11" fill="#898781" text-anchor="middle">600k</text>
 <text x="414" y="470" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>
-<path d="M103.8,405.4 L129.7,414.6 L181.4,411.8 L222.7,414.4 L258.9,411.1 L295.1,411.1 L336.5,408.4 L377.8,405.4 L414.0,401.8 L450.2,402.2 L491.5,402.5 L553.6,391.9 L615.6,345.3 L677.6,346.2 L739.7,350.7" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="103.8" cy="405.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="129.7" cy="414.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="181.4" cy="411.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="222.7" cy="414.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="258.9" cy="411.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="295.1" cy="411.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="336.5" cy="408.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="377.8" cy="405.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="414.0" cy="401.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="450.2" cy="402.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="491.5" cy="402.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="553.6" cy="391.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="615.6" cy="345.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="677.6" cy="346.2" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
-<circle cx="739.7" cy="350.7" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
-<text x="751.7" y="354.7" font-size="12" font-weight="600" fill="#0b0b0b">aeron</text>
-<path d="M88.3,386.6 L103.8,376.6 L119.4,384.1 L134.9,382.8 L150.4,379.4 L165.9,374.9 L181.4,370.8 L196.9,362.2 L212.4,346.6 L227.9,319.3 L233.1,306.0 L238.2,283.6 L243.4,257.4 L248.6,200.6 L253.8,148.2 L258.9,134.6 L274.4,117.7 L284.8,118.2" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="88.3" cy="386.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="103.8" cy="376.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="119.4" cy="384.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="134.9" cy="382.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="150.4" cy="379.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="165.9" cy="374.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="181.4" cy="370.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="196.9" cy="362.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="212.4" cy="346.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="227.9" cy="319.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="233.1" cy="306.0" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="238.2" cy="283.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="243.4" cy="257.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="248.6" cy="200.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="253.8" cy="148.2" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
-<circle cx="258.9" cy="134.6" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
-<circle cx="274.4" cy="117.7" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
-<circle cx="284.8" cy="118.2" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
-<text x="296.8" y="112.2" font-size="12" font-weight="600" fill="#0b0b0b">braft</text>
-<path d="M88.3,357.0 L98.7,350.3 L109.0,344.5 L119.4,340.8 L129.7,334.7 L134.9,333.7 L140.0,329.7 L150.4,324.1 L155.5,320.1 L165.9,311.8 L173.1,306.2 L181.4,300.8 L191.7,289.4 L202.1,277.2 L212.4,259.4 L222.7,247.6" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="88.3" cy="357.0" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="98.7" cy="350.3" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="109.0" cy="344.5" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="119.4" cy="340.8" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="129.7" cy="334.7" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="134.9" cy="333.7" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="140.0" cy="329.7" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="150.4" cy="324.1" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="155.5" cy="320.1" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="165.9" cy="311.8" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="173.1" cy="306.2" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="181.4" cy="300.8" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="191.7" cy="289.4" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
-<circle cx="202.1" cy="277.2" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
-<circle cx="212.4" cy="259.4" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
-<circle cx="222.7" cy="247.6" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
-<text x="153.9" y="315.8" font-size="12" text-anchor="end" font-weight="600" fill="#0b0b0b">openraft</text>
-<circle cx="83" cy="484" r="4.5" fill="#2a78d6"/>
-<text x="94" y="488" font-size="11" fill="#52514e">aeron</text>
-<circle cx="142.0" cy="484" r="4.5" fill="#eb6834"/>
-<text x="153.0" y="488" font-size="11" fill="#52514e">braft</text>
-<circle cx="201.0" cy="484" r="4.5" fill="#1baf7a"/>
-<text x="212.0" y="488" font-size="11" fill="#52514e">openraft</text>
+<path d="M88.3,385.6 L103.8,383.1 L119.4,382.8 L134.9,385.6 L150.4,385.1 L165.9,386.5 L181.4,381.9 L196.9,379.7 L212.4,374.1 L227.9,370.7 L233.1,371.3 L238.2,369.8 L243.4,368.2 L248.6,367.2 L253.8,364.3 L258.9,362.9 L274.4,355.9 L284.8,356.8 L305.4,347.9 L336.5,318.6 L367.5,-259.9 L398.5,-82.0" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="88.3" cy="385.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="103.8" cy="383.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="119.4" cy="382.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="134.9" cy="385.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="150.4" cy="385.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="165.9" cy="386.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="181.4" cy="381.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="196.9" cy="379.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="212.4" cy="374.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="227.9" cy="370.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="233.1" cy="371.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="238.2" cy="369.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="243.4" cy="368.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="248.6" cy="367.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="253.8" cy="364.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="258.9" cy="362.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="274.4" cy="355.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="284.8" cy="356.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="305.4" cy="347.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="336.5" cy="318.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="367.5" cy="-259.9" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="398.5" cy="-82.0" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<text x="410.5" y="-88.0" font-size="12" font-weight="600" fill="#0b0b0b">braft</text>
+<circle cx="83" cy="484" r="4.5" fill="#eb6834"/>
+<text x="94" y="488" font-size="11" fill="#52514e">braft</text>
 </svg>

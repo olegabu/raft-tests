@@ -60,12 +60,12 @@ node-rtt:
 # number of CSVs (rows carry their own `product` column), which is what lets the
 # cross-round-trip comparison see all of sequencer's phases at once.
 #
-# CHART_CSVS is deliberately a wildcard over each product's own sweep output
-# plus the historical sweep/knee-sweep.csv: a product whose sweep hasn't been
-# re-run yet simply keeps its committed curve, rather than vanishing from the
-# combined chart.
-CHART_CSVS ?= sweep/knee-sweep.csv \
-              $(wildcard braft/braft.csv) $(wildcard aeron/aeron.csv) \
+# Only current-fleet CSVs. mkcharts.py averages rows sharing a product and
+# rate, so mixing fleets silently produces a curve that is neither: feeding it
+# both the c6i and c7a braft rows drew a "knee" at 165k that exists in neither
+# dataset. sweep/knee-sweep-c6i.csv is kept for provenance and deliberately NOT
+# listed here — chart it on its own if you want the old fleet's shape.
+CHART_CSVS ?= $(wildcard braft/braft.csv) $(wildcard aeron/aeron.csv) \
               $(wildcard openraft/openraft.csv) \
               $(wildcard sequencer/seq.csv) $(wildcard sequencer/seq-relay.csv) \
               $(wildcard sequencer/seq-output.csv)

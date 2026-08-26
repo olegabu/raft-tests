@@ -1,8 +1,18 @@
 # sweep — the rate sweeps behind the knee charts
 
-`knee-sweep.csv` is the raw output of the three open-loop rate sweeps whose
-numbers and charts appear in the [root README](../README.md#the-knee-and-why-it-only-shows-up-in-open-loop).
-57 rows; a rate may repeat, and repeats are averaged for the charts, all latencies in microseconds:
+**Current fleet (c7a.2xlarge, AMD Genoa ~3.7 GHz).** Each product now
+writes its own CSV next to its Makefile, produced by that product's own
+`make sweep`:
+
+| file | product |
+|---|---|
+| `../braft/braft.csv` | braft |
+| `../openraft/openraft.csv` | openraft |
+| `../aeron/aeron.csv` | aeron |
+| `../sequencer/seq.csv`, `seq-relay.csv`, `seq-output.csv` | sequencer's five round trips |
+
+`make charts` in the repo root renders every figure from exactly those
+files. All latencies are microseconds; the columns are:
 
 ```
 product,rate,achieved,p50,p90,p99,p999,max,dropped,lag
@@ -15,27 +25,27 @@ actually offered.
 
 Rates are spaced tightest inside each product's comfort zone and through its
 knee, which is where the shape of the curve is decided; past the knee they widen
-out. Every row was collected with a 10 s warmup and a 30 s measurement window,
-**one run per rate**, against the same 3-node multi-AZ fleet with the leader
-co-located with the client. Per-product `make client` flags are in the root README's comfort-zone
-section — they are not uniform, because `MAX_INFLIGHT` and `BURST` have to be set
-per transport.
+out.
 
-braft's rows have gone through two re-measurements on two different fleets since
-the original sweep (same instance types, same multi-AZ layout each time), and the
-current `knee-sweep.csv` reflects only the latest: `braft-knee-runs.csv` (second
-fleet, `raft_enable_append_entries_cache=true`, `PIPELINE=4`, two repeats per rate
-through the knee) was superseded by `braft-pipeline8-knee.csv` (third fleet, same
-cache setting plus `PIPELINE=8` — see
-[Deciding PIPELINE](../braft/README.md#deciding-pipeline)
-— two repeats per rate from 100k to 170k). `mkcharts.py` averages repeated rates.
-The three fleets agree on shape but not exactly on level (55k p50: 748 µs on the
-first fleet, 626 µs on the second, 660 µs on the third), so braft's curve is
-entirely third-fleet rather than mixed, while openraft's and aeron's remain
-first-fleet. Do not compare braft's absolute floor against theirs to two
-significant figures — and do not compare braft's own historical numbers in this
-README's prose (e.g. the `AE_CACHE`-alone finding above) against the current CSV
-too precisely either, for the same reason.
+## Never mix fleets in one chart
+
+`knee-sweep-c6i.csv` is the previous fleet's combined sweep
+(c6i.2xlarge), kept for provenance. It is **deliberately not** an input
+to `make charts`.
+
+`mkcharts.py` averages rows that share a product *and* a rate — that is
+how repeated runs at one rate get combined. Feed it two fleets' rows for
+the same product and it will happily average those too, producing a
+curve that describes neither: doing exactly this drew a braft "knee" at
+165k that appears in neither dataset (the c6i rows turn there, the c7a
+rows are still flat). Chart an old fleet's file on its own if you want
+its shape.
+
+The same caution applies to prose: this repo's older braft findings were
+measured on earlier fleets, and their absolute numbers should not be
+compared against the current CSVs to two significant figures. The three
+c6i-era fleets already disagreed on level while agreeing on shape (55k
+p50: 748 µs, 626 µs, 660 µs).
 
 `braft-tuning.csv` is the first tuning ladder: 21 runs at a fixed 100k varying
 `event_dispatcher_num`, connection type, channel count, pipeline depth, server
