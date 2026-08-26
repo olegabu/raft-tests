@@ -80,16 +80,21 @@ OUTPUT_GATEWAY_BIN := $(APP)_brpc_output_gateway
 else ifeq ($(OUTPUT_GATEWAY_FLAVOR),grpc)
 OUTPUT_GATEWAY_BIN := $(APP)_grpc_output_gateway
 else ifeq ($(OUTPUT_GATEWAY_FLAVOR),websocket)
-OUTPUT_GATEWAY_BIN := $(APP)_output_gateway
+OUTPUT_GATEWAY_BIN := $(APP)_websocket_output_gateway
 else ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 $(error OUTPUT_GATEWAY_FLAVOR must be empty, brpc, grpc, or websocket, got "$(OUTPUT_GATEWAY_FLAVOR)")
 endif
-# Empty (the default) leaves the output gateway binary's own gflag
-# default (0, off — never delay a flush; see OutputGatewayConfig::
-# batchWindow, gateway/output/src/output_gateway_impl.hpp) in place —
-# override to sweep this tradeoff, e.g. OUTPUT_BATCH_WINDOW_US=200.
-OUTPUT_BATCH_WINDOW_US ?=
-OUTPUT_BATCH_WINDOW_FLAG = $(if $(OUTPUT_BATCH_WINDOW_US),--batch_window_us=$(OUTPUT_BATCH_WINDOW_US),)
+# Ring sizing and idle behaviour for the output gateway's per-subscriber
+# readers (sequencer's gateway/output/README.md, "Delivery: one ring,
+# one reader per subscriber"). Empty leaves each binary's own gflag
+# default in place. --batch_window_us used to live here; it was an
+# artificial flush delay that the per-subscriber reader design made
+# obsolete, and the flag no longer exists.
+OUTPUT_RING_SLOTS ?=
+OUTPUT_RING_SLOTS_FLAG = $(if $(OUTPUT_RING_SLOTS),--ring_slots=$(OUTPUT_RING_SLOTS),)
+OUTPUT_IDLE_SPIN ?=
+OUTPUT_IDLE_SPIN_FLAG = $(if $(OUTPUT_IDLE_SPIN),--idle_spin_iterations=$(OUTPUT_IDLE_SPIN),)
+OUTPUT_TUNING_FLAGS = $(OUTPUT_RING_SLOTS_FLAG) $(OUTPUT_IDLE_SPIN_FLAG)
 
 # Phase 1 (see sequencer's specification.md §3): measures exactly the
 # same round trip raft-tests/braft/client.cpp does — submit to
@@ -143,7 +148,7 @@ push:
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/gateway/relay/sequencer_relay $(SSH_USER)@$(NODE1):$(NODE_DIR)/
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_brpc_output_gateway \
 		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_grpc_output_gateway \
-		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_output_gateway \
+		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_websocket_output_gateway \
 		$(SSH_USER)@$(NODE1):$(NODE_DIR)/
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "mkdir -p $(CLIENT_DIR)"
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_input_gateway \
@@ -216,7 +221,7 @@ ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 		 rm -f $(APP)_output_gateway.pid; sleep 1; \
 		 nohup ./$(OUTPUT_GATEWAY_BIN) --data_dir=$(NODE_DIR)/data \
 			--resume_file=$(NODE_DIR)/output_resume_$(OUTPUT_GATEWAY_FLAVOR) \
-			--listen_port=$(OUTPUT_GATEWAY_PORT) $(OUTPUT_BATCH_WINDOW_FLAG) --logtostderr --logbufsecs=0 \
+			--listen_port=$(OUTPUT_GATEWAY_PORT) $(OUTPUT_TUNING_FLAGS) --logtostderr --logbufsecs=0 \
 			> $(NODE_DIR)/output_gateway.log 2>&1 < /dev/null & echo \$$! > $(APP)_output_gateway.pid"
 endif
 
