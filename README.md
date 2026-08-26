@@ -163,36 +163,44 @@ who wants the answer before the derivation.
 
 ![p50 latency vs offered rate for braft, openraft and Aeron Cluster, each flat then kneeing upward](knee-curves.svg)
 
-**Aeron wins, and it isn't close.**[[graph]](#aeron--flat-to-400k-then-a-step-up-at-460k) Its comfort zone runs to ~400k req/s at
-537/705 µs (p50/p99, a ~1.3x ratio) on this repo's fleet — multi-AZ,
-`c6i.2xlarge` instances, nothing exotic. That is consistent with what Aeron's
+**Aeron wins on latency, and it isn't close.**[[graph]](#aeron--flat-to-250k-then-a-step-up) Its comfort zone runs to ~250k req/s at
+559/675 µs (p50/p99, a 1.2x ratio) on this repo's fleet — multi-AZ,
+`c7a.2xlarge` instances, nothing exotic — and that ratio holds at 1.2x across
+a 10x span of offered rate. That is consistent with what Aeron's
 own vendor publishes: AWS's 2025 Aeron-on-AWS benchmark reports Aeron Cluster
 (open source) at 95/136 µs (p50/p99) at 100k msg/s, single-AZ, on much larger
 network-optimized `c6in.16xlarge` instances.[^aeron-aws] The gap between that
-and our own 487/626 µs at the same 100k offered rate is almost exactly this
+and our own 522/607 µs at the same 100k offered rate is almost exactly this
 repo's own measured cross-AZ quorum round trip (387-451 µs, see
 [What `make node-rtt` actually measures](#what-make-node-rtt-actually-measures))
-— the difference is the AZ hop, not the software. And the same benchmark[^aeron-aws]
+— the difference is the AZ hop, not the software.
+
+**Aeron is also the one product that did not gain from the c7a fleet**: its
+latency is unchanged but its ceiling fell from ~400k to ~250k, while braft's
+rose from ~160k to ~250k. The two now knee at roughly the same rate, which
+they did not before. Why aeron moved the other way is not established — see
+its section below. And the same benchmark[^aeron-aws]
 shows Aeron OSS has its own real knee under enough load: at 1M msg/s its p50
 balloons to 3,301 µs. Same shape we found, just further out and on different
 hardware — which is itself a useful cross-check that this
 repo's methodology is measuring something real.
 
-**braft is comfortably within a financial system's load requirements.**[[graph]](#braft--flat-to-160k-then-both-percentiles-go-together)
-Its comfort zone runs to ~160k req/s, and both p50 *and* p99 stay under 1 ms
-through 100k req/s (748/984 µs) — a materially different regime from "fast in
-isolation," since it holds under sustained, fully-placed load with drops at
-the rig's fixed startup cost and nothing else.
+**braft is comfortably within a financial system's load requirements.**[[graph]](#braft--flat-to-250k-then-a-cliff)
+Its comfort zone runs to ~250k req/s, and both p50 *and* p99 stay under 1 ms
+through 145k req/s (749/1009 µs at 145k; 666/834 µs at 100k) — a materially
+different regime from "fast in isolation," since it holds under sustained,
+fully-placed load with drops at the rig's fixed startup cost and nothing else.
 
 **openraft's tail doesn't detach the way the other two's do, but its
-overall numbers are too low for this to matter much.**[[graph]](#openraft--gradual-no-cliff) Its p99/p50 ratio
-never spikes past ~3x anywhere in the measured range — no sudden blowout, just
+overall numbers are still the weakest of the three.**[[graph]](#openraft--gradual-no-cliff-and-much-faster-on-c7a) Its p99/p50 ratio
+never spikes past ~2.8x anywhere in the measured range — no sudden blowout, just
 the whole distribution shifting together as load rises, because latency grows
 close to linearly with offered rate rather than staying flat and then
 breaking. That also means it has no sharp knee to find: there's no plateau to
-fall off of, just a slope. It caps out around 128k req/s with a p50 already
-past 2.7 ms there, well below what the other two sustain at similar or higher
-rates. Pinning down *why* the curve is linear is open to further
+fall off of, just a slope. Faster cores helped it more than the others in
+latency terms (1159 µs at 100k, down from 1556), but its ceiling is set by
+requests the rig can't place rather than by latency: a quarter of the offered
+load goes unplaced at 140k, against effectively none for braft at that rate. Pinning down *why* the curve is linear is open to further
 investigation, but a lower priority than it might otherwise be — the
 baseline numbers put it out of contention for this use case regardless of how
 its tail behaves.
@@ -201,15 +209,21 @@ its tail behaves.
 of the two credible options prove the approach works.** The cross-AZ RTT in
 us-east-1 — roughly half a millisecond — accounts for most of braft's latency
 floor and a fixed cost aeron and openraft pay too; none of it is protocol
-inefficiency. What's left is genuinely encouraging: braft holding six figures
-of throughput under 1 ms, and aeron holding four times that with an even
-tighter tail, both demonstrate that a raft-replicated, cross-AZ financial
-system with predictable latency and a tight tail is buildable on commodity
-cloud infrastructure — this was not obvious going in. That leaves a choice
-between aeron and braft to be made on other grounds: language expertise,
-existing libraries (an existing matching-engine core, say), and the
-discipline required either way — allocation-free, GC-free Java with Aeron
-Cluster, or C++ with braft. Both are real options; neither is a compromise.
+inefficiency. What's left is genuinely encouraging: braft holds
+145k req/s with both percentiles under 1 ms and runs flat to 250k, and aeron
+holds 250k at 559 µs with a 1.2x tail ratio. Both demonstrate that a
+raft-replicated, cross-AZ financial system with predictable latency and a
+tight tail is buildable on commodity cloud infrastructure — this was not
+obvious going in.
+
+On the c7a fleet the two now knee at roughly the same rate, so the choice
+between them rests less on headroom than it used to and more on other
+grounds: language expertise, existing libraries (an existing matching-engine
+core, say), and the discipline required either way — allocation-free, GC-free
+Java with Aeron Cluster, or C++ with braft. Aeron keeps a real latency edge
+(~560 µs against braft's ~750 µs at comparable load) and a tighter tail;
+braft was the one that improved on faster cores. Both are real options;
+neither is a compromise.
 
 [^aeron-aws]: [Aeron on AWS: 2025 Performance Benchmark Results](https://aws.amazon.com/blogs/industries/aeron-on-aws-2025-performance-benchmark-results/) — AWS Industries blog. Single-AZ, `c6in.16xlarge`, Aeron Cluster open-source edition.
 
@@ -553,6 +567,12 @@ a time so they never compete for CPU.
 | openraft | 986 µs @ 27,949/s | 1005 µs @ 27,926/s | +1.9% | 0 µs / 236 µs |
 | aeron | 491 µs @ 56,840/s | 559 µs @ 56,839/s | +13.8% | 0 µs / 1453 µs |
 
+This validation was run on the earlier `c6i.2xlarge` fleet and has not been
+re-run on c7a — it establishes that the two load modes agree, which is a
+property of the rig rather than of a particular instance type, so its absolute
+numbers are c6i-era and should not be compared against the results sections
+above.
+
 All three inside the 15% criterion, with the rigs holding the offered rate to
 within a handful of requests per second. Schedule lag of 0-1 µs at the median is
 what makes the delta interpretable as the system's behaviour rather than the
@@ -857,40 +877,55 @@ paying for it in latency. openraft is the exception: it gains 523 µs, or
 38%, going from 85k to 10k, but that is not a floor being approached, it is the
 near-linear cost curve described below extended down.
 
-### aeron — flat to 400k, then a step up at 460k
+### aeron — flat to 250k, then a step up
 
-![aeron: p50 and p99 flat from 25k all the way to 400k, then a single step up after 460k](knee-aeron.svg)
+![aeron: p50 and p99 flat from 25k to 250k, then a single step up at 290k](knee-aeron.svg)
 
-| offered | achieved | p50 | p99 | dropped | of offered |
-|---|---|---|---|---|---|
-| 25k | 25,000 | 521 µs | 609 µs | 7 | 0.00% |
-| 50k | 49,999 | 473 µs | 560 µs | 15 | 0.00% |
-| 100k | 99,713 | 487 µs | 626 µs | 2,859 | 0.10% |
-| 140k | 139,998 | 474 µs | 567 µs | 42 | 0.00% |
-| 175k | 174,979 | 491 µs | 620 µs | 1,282 | 0.02% |
-| 210k | 209,992 | 491 µs | 587 µs | 324 | 0.01% |
-| 250k | 249,955 | 505 µs | 607 µs | 4,564 | 0.06% |
-| 290k | 289,541 | 521 µs | 621 µs | 36,528 | 0.42% |
-| 325k | 324,911 | 541 µs | 681 µs | 3,926 | 0.04% |
-| 360k | 359,937 | 539 µs | 793 µs | 9,430 | 0.09% |
-| 400k | 399,983 | 537 µs | 705 µs | 4,655 | 0.04% |
-| 460k | 456,233 | 600 µs | 1,042 µs | 56,328 | 0.41% |
-| 520k | 519,766 | 977 µs | 1,328 µs | 44,745 | 0.29% |
-| 580k | **573,854** | 968 µs | 1,271 µs | **126,278** | 0.73% |
-| 640k | **626,508** | 923 µs | 1,383 µs | **170,461** | 0.89% |
+| offered | achieved | p50 | p99 | p99/p50 | dropped | of offered |
+|---|---|---|---|---|---|---|
+| 25k | 25,000 | 543 µs | 631 µs | 1.2x | 4 | 0.00% |
+| 50k | 49,999 | 495 µs | 572 µs | 1.2x | 9 | 0.00% |
+| 100k | 99,998 | 522 µs | 607 µs | 1.2x | 19 | 0.00% |
+| 140k | 139,978 | 527 µs | 609 µs | 1.2x | 454 | 0.02% |
+| 175k | 174,961 | 531 µs | 615 µs | 1.2x | 2,691 | 0.08% |
+| 210k | 209,954 | 536 µs | 639 µs | 1.2x | 2,046 | 0.05% |
+| 250k | 249,932 | 559 µs | 675 µs | 1.2x | 1,699 | 0.03% |
+| 290k | 287,964 | 2,134 µs | 3,465 µs | 1.6x | 48,764 | 0.84% |
+| 325k | **321,084** | 2,129 µs | 3,284 µs | 1.5x | **98,978** | 1.52% |
+| 360k | 357,560 | 2,055 µs | 2,813 µs | 1.4x | 55,492 | 0.77% |
+| 400k | 397,902 | 1,766 µs | 2,764 µs | 1.6x | 54,977 | 0.69% |
+| 460k | **419,941** | 2,320 µs | 2,701 µs | 1.2x | **1,074,141** | 11.68% |
+| 520k | **391,819** | 2,514 µs | 2,813 µs | 1.1x | **3,233,001** | 31.09% |
+| 580k | **481,591** | 2,017 µs | 2,205 µs | 1.1x | **2,464,738** | 21.25% |
+| 640k | **412,502** | 2,379 µs | 2,611 µs | 1.1x | **5,711,558** | 44.62% |
 
-From 25k to 400k — a 16x change in load — p50 moves 68 µs, and it is *lower* at
-50k than at 25k. There is no rate in that range at which Aeron behaves
-qualitatively differently.
+One run per rate, 5 s warmup / 20 s measure, on the **c7a.2xlarge** fleet.
 
-Its drop counts, though, do not vary smoothly: 42 at 140k, 2,859 at 100k, and
-36,528 at 290k, with no ordering by rate. At one run per rate, a drop figure below
-about 0.5% is run-to-run noise — a stray pause somewhere in the client JVM or the
-driver — rather than a property of that rate. The counts only become signal when
-they climb monotonically and stay climbing, which here starts at 580k. (An earlier
-revision of this file explained the 100k row's count as JIT warmup because it ran
-first in its sweep; the low-rate points refute that, since 25k also ran first in
-its own sweep and dropped 7.)
+**Aeron is still the flattest and lowest curve of the three, and by a wide
+margin.** A 10x change in offered rate — 25k to 250k — moves p50 by 16 µs
+(543 → 559), and p99/p50 sits at a steady 1.2x across that entire range.
+Nothing else here holds a ratio that tight over that span.
+
+**But it is the one product that did not improve on faster cores — its
+ceiling moved down, from ~400k to ~250k.** The comfort-zone latency is
+essentially unchanged (495-559 µs here against ~537 µs on c6i); what changed
+is where the step happens. 250k is healthy at 559 µs; 290k jumps to 2134 µs
+while still placing 99.3% of the offered load, so this is a real transition
+rather than the rig running out of capacity.
+
+**What is not established is why.** Aeron leans harder than the other two on
+busy-spinning and shared-memory buffers, so it is plausibly more sensitive to
+the Intel→AMD change in memory subsystem and core topology than to clock
+speed — but this sweep does not demonstrate that, and no attempt was made
+here to separate hardware effects from JVM or media-driver configuration. It
+is reported as measured.
+
+**Past 400k the rig, not the cluster, is the limit.** From 460k on, between
+12% and 45% of the offered load is never placed and achieved throughput
+oscillates between 390k and 480k without a trend. Those rows say the load
+generator on an 8-vCPU client box cannot drive that rate; they do not
+describe cluster behaviour, and the latency figures on them should not be
+read as if they did.
 
 ### braft — flat to 250k, then a cliff
 

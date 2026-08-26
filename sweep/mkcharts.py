@@ -110,7 +110,12 @@ axes(o,L,T,PW,PH,XMAX,100000,[500,1000,2000,5000,10000],"p50 latency (log scale)
 # only openraft is present (braft is a clear ~45-65px below it through this
 # whole range) and there is enough clearance from the y-axis to avoid the
 # tick labels.
-LABEL_AT = {"aeron": ("last", 12, 4), "braft": ("last", 12, -6), "openraft": (85000, -12, 4)}
+# braft and openraft are labelled at a chosen point rather than their
+# line-end: both collapse past their knee to values well above this
+# chart's YMAX, so a label at the last point would be drawn off-canvas
+# entirely (braft's last point is 85 ms against a 16 ms ceiling).
+# aeron's line-end is still on-scale, so it keeps the simple form.
+LABEL_AT = {"aeron": ("last", 12, 4), "braft": (250000, 12, -8), "openraft": (85000, -12, 4)}
 # Guarded, not D[name] unconditionally: a sweep CSV for a new product
 # (raft-tests/sequencer/README.md's own, for one) legitimately has
 # none of these three -- this combined chart is specifically the
@@ -149,10 +154,15 @@ CFG={
               [(110000,"drops climb",16)],
               "openraft — still no cliff, but a much lower slope on c7a",
               "Latency never cliffs; the dashed line is where the rig's own drops start climbing."),
- "aeron":    (650000,100000,(450, 1500),[500,600,700,800,1000,1200], 400000,
-              [(460000,"knee",16)],
-              "aeron — flat to 400k, then one step up",
-              "A 16x change in offered rate, 25k to 400k, moves p50 by 68 µs."),
+ # Re-swept on c7a. The comfort-zone latency is essentially unchanged
+ # (495-559us, against ~537 on c6i) but the ceiling moved *down*, from
+ # ~400k to ~250k — the one product that did not improve on faster
+ # cores. See README.md's aeron section for what is and isn't
+ # established about why.
+ "aeron":    (650000,100000,(450, 4000),[500,600,800,1000,1500,2000,3000], 250000,
+              [(270000,"knee",16)],
+              "aeron — still the flattest curve, but the ceiling moved down on c7a",
+              "A 10x change in offered rate, 25k to 250k, moves p50 by 16 µs; 290k steps to 2.1 ms."),
  # raft-tests/sequencer/README.md's phase 1 (submission to synchronous
  # receipt) — client -> input gateway -> node -> node -> input gateway
  # -> client, one hop longer than bare braft on purpose. Not a gradual

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="440" viewBox="0 0 820 440" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="sequencer — flat to ~115k, then a severe stall">
+<rect width="820" height="440" fill="#fcfcfb"/>
+<text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer — flat to ~115k, then a severe stall</text>
+<text x="78" y="46" font-size="12" fill="#52514e">achieved plateaus at ~123-126k past the knee regardless of offered rate; p50 crosses 1s by 130k.</text>
+<text x="78" y="62" font-size="12" fill="#52514e">p50 and p99 latency, open loop. Hollow marker = the cluster fell behind the offered rate.</text>
+<rect x="78" y="86" width="357.6" height="280" fill="#f0efec"/>
+<text x="86" y="102" font-size="11" fill="#898781">comfort zone</text>
+<line x1="457.4" y1="86" x2="457.4" y2="366" stroke="#898781" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="463.4" y="102" font-size="11" font-weight="600" fill="#52514e">knee</text>
+<line x1="78" y1="358.7" x2="700" y2="358.7" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="362.7" font-size="11" fill="#898781" text-anchor="end">500</text>
+<line x1="78" y1="335.9" x2="700" y2="335.9" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="339.9" font-size="11" fill="#898781" text-anchor="end">1,000</text>
+<line x1="78" y1="313.1" x2="700" y2="313.1" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="317.1" font-size="11" fill="#898781" text-anchor="end">2,000</text>
+<line x1="78" y1="283.0" x2="700" y2="283.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="287.0" font-size="11" fill="#898781" text-anchor="end">5,000</text>
+<line x1="78" y1="260.2" x2="700" y2="260.2" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="264.2" font-size="11" fill="#898781" text-anchor="end">10,000</text>
+<line x1="78" y1="207.3" x2="700" y2="207.3" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="211.3" font-size="11" fill="#898781" text-anchor="end">50,000</text>
+<line x1="78" y1="161.7" x2="700" y2="161.7" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="165.7" font-size="11" fill="#898781" text-anchor="end">200,000</text>
+<line x1="78" y1="108.8" x2="700" y2="108.8" stroke="#e1e0d9" stroke-width="1"/>
+<text x="68" y="112.8" font-size="11" fill="#898781" text-anchor="end">1,000,000</text>
+<text x="20" y="226" font-size="11" fill="#52514e" text-anchor="middle" transform="rotate(-90 20 226)">latency (µs), log scale</text>
+<line x1="78" y1="366" x2="700" y2="366" stroke="#c3c2b7" stroke-width="1"/>
+<line x1="78.0" y1="366" x2="78.0" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="78.0" y="386" font-size="11" fill="#898781" text-anchor="middle">0k</text>
+<line x1="155.8" y1="366" x2="155.8" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="155.8" y="386" font-size="11" fill="#898781" text-anchor="middle">25k</text>
+<line x1="233.5" y1="366" x2="233.5" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="233.5" y="386" font-size="11" fill="#898781" text-anchor="middle">50k</text>
+<line x1="311.2" y1="366" x2="311.2" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="311.2" y="386" font-size="11" fill="#898781" text-anchor="middle">75k</text>
+<line x1="389.0" y1="366" x2="389.0" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="389.0" y="386" font-size="11" fill="#898781" text-anchor="middle">100k</text>
+<line x1="466.8" y1="366" x2="466.8" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="466.8" y="386" font-size="11" fill="#898781" text-anchor="middle">125k</text>
+<line x1="544.5" y1="366" x2="544.5" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="544.5" y="386" font-size="11" fill="#898781" text-anchor="middle">150k</text>
+<line x1="622.2" y1="366" x2="622.2" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="622.2" y="386" font-size="11" fill="#898781" text-anchor="middle">175k</text>
+<line x1="700.0" y1="366" x2="700.0" y2="371" stroke="#c3c2b7" stroke-width="1"/>
+<text x="700.0" y="386" font-size="11" fill="#898781" text-anchor="middle">200k</text>
+<text x="389" y="410" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>
+<path d="M109.1,353.6 L155.8,345.5 L202.4,293.7 L249.1,283.3 L295.7,283.1 L342.3,282.9 L389.0,281.9 L420.1,281.6 L435.6,281.0 L451.2,280.8 L466.8,278.3 L482.3,266.5" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="109.1" cy="353.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="155.8" cy="345.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="202.4" cy="293.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="249.1" cy="283.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="295.7" cy="283.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="342.3" cy="282.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="389.0" cy="281.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="420.1" cy="281.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="435.6" cy="281.0" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="451.2" cy="280.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="466.8" cy="278.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="482.3" cy="266.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="494.3" y="270.5" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
+<path d="M109.1,354.9 L155.8,350.7 L202.4,348.8 L249.1,345.8 L295.7,332.9 L342.3,327.6 L389.0,325.5 L420.1,326.2 L435.6,323.7 L451.2,322.1 L466.8,316.5 L482.3,302.3" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="109.1" cy="354.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="155.8" cy="350.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="202.4" cy="348.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="249.1" cy="345.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="295.7" cy="332.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="342.3" cy="327.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="389.0" cy="325.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="420.1" cy="326.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="435.6" cy="323.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="451.2" cy="322.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="466.8" cy="316.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="482.3" cy="302.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="494.3" y="306.3" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
+<circle cx="83" cy="424" r="4.5" fill="#2a78d6"/>
+<text x="94" y="428" font-size="11" fill="#52514e">p50</text>
+<circle cx="128.8" cy="424" r="4.5" fill="#eb6834"/>
+<text x="139.8" y="428" font-size="11" fill="#52514e">p99</text>
+</svg>
