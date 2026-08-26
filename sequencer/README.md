@@ -8,7 +8,7 @@ product"](../README.md#adding-a-new-raft-product) pattern. `APP`
 selects which of sequencer's `examples/` this measures; `counter` is
 its only one so far.
 
-## The two flavors
+## The flavors
 
 sequencer's own `bench/load_generator/README.md` names three round
 trips; this Makefile drives two of them (the third, submission to
@@ -93,9 +93,18 @@ every gateway path sits inside the shaded sub-millisecond band through
 |---|---|---|---|
 | synchronous ack | 1373 µs | 5167 µs | 125k |
 | relay gateway (gRPC) | **986 µs** | 2307 µs | 120k |
-| output gateway, brpc | **844 µs** | 2321 µs | 125k |
-| output gateway, gRPC | **850 µs** | 1597 µs | 115k |
-| output gateway, WebSocket | **978 µs** | 4075 µs | 125k |
+| output gateway, brpc | **855 µs** | 1876 µs | 120k |
+| output gateway, gRPC | **864 µs** | 1785 µs | 115k |
+| output gateway, WebSocket | **892 µs** | 3877 µs | 120k |
+
+The three output flavors are now served by **one gateway process** on
+three ports, sharing a single journal tail, codec pass and ring — so
+unlike every earlier sweep, their rows come from the same cluster
+lifetime and the same traffic rather than three separate runs. Against
+the previous three-process numbers, the comfort zone is unchanged
+within noise (brpc +1-3%, gRPC +1%) and WebSocket is 6-9% *faster*
+across the range, which is where the text-to-binary framing fix shows
+up: text frames made Beast UTF-8-validate every write.
 
 Two things worth stating plainly, because the headline is easy to
 overstate:
@@ -110,7 +119,7 @@ overstate:
   subscriber, while the ack has to travel back through the input
   gateway to the submitting client.
 
-The knee sits at 115-125k across the five, with the gRPC output flavor
+The knee sits at 115-120k across the five, with the gRPC output flavor
 turning earliest. Past it latency goes to whole seconds — the panels
 clip those points rather than flatten the scale everything else lives
 on. Note the p99 column is noisier than p50 and does not rank the same
