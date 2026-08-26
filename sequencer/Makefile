@@ -73,14 +73,23 @@ RELAY_IDLE_SPIN_FLAG = $(if $(RELAY_IDLE_SPIN_ITERATIONS),--relay_idle_spin_iter
 # --relay_grpc_addr are independent and combinable), it's just what
 # this fleet's single-relay precedent already establishes as enough
 # for one benchmark run.
+# One binary now serves all three protocols at once, each on its own
+# port (sequencer's examples/counter/output_gateway_main.cpp), so
+# OUTPUT_GATEWAY_FLAVOR no longer selects a binary — it selects only
+# which flavor the load generator OBSERVES. All three are always up,
+# which is what lets a single sweep compare them against identical
+# traffic instead of three separate cluster lifetimes.
 OUTPUT_GATEWAY_FLAVOR ?=
-OUTPUT_GATEWAY_PORT   ?= 8600
+OUTPUT_BRPC_PORT      ?= 8600
+OUTPUT_GRPC_PORT      ?= 8601
+OUTPUT_WEBSOCKET_PORT ?= 8602
+OUTPUT_GATEWAY_BIN    := $(APP)_output_gateway
 ifeq ($(OUTPUT_GATEWAY_FLAVOR),brpc)
-OUTPUT_GATEWAY_BIN := $(APP)_brpc_output_gateway
+OUTPUT_GATEWAY_PORT := $(OUTPUT_BRPC_PORT)
 else ifeq ($(OUTPUT_GATEWAY_FLAVOR),grpc)
-OUTPUT_GATEWAY_BIN := $(APP)_grpc_output_gateway
+OUTPUT_GATEWAY_PORT := $(OUTPUT_GRPC_PORT)
 else ifeq ($(OUTPUT_GATEWAY_FLAVOR),websocket)
-OUTPUT_GATEWAY_BIN := $(APP)_websocket_output_gateway
+OUTPUT_GATEWAY_PORT := $(OUTPUT_WEBSOCKET_PORT)
 else ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 $(error OUTPUT_GATEWAY_FLAVOR must be empty, brpc, grpc, or websocket, got "$(OUTPUT_GATEWAY_FLAVOR)")
 endif
@@ -146,7 +155,8 @@ push:
 		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_node $(SSH_USER)@$$h:$(NODE_DIR)/ ; \
 	done
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/gateway/relay/sequencer_relay $(SSH_USER)@$(NODE1):$(NODE_DIR)/
-	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_brpc_output_gateway \
+	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_output_gateway \
+		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_brpc_output_gateway \
 		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_grpc_output_gateway \
 		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_websocket_output_gateway \
 		$(SSH_USER)@$(NODE1):$(NODE_DIR)/
@@ -220,8 +230,10 @@ ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 		"cd $(NODE_DIR) && { [ -f $(APP)_output_gateway.pid ] && kill -TERM \$$(cat $(APP)_output_gateway.pid) 2>/dev/null; :; }; \
 		 rm -f $(APP)_output_gateway.pid; sleep 1; \
 		 nohup ./$(OUTPUT_GATEWAY_BIN) --data_dir=$(NODE_DIR)/data \
-			--resume_file=$(NODE_DIR)/output_resume_$(OUTPUT_GATEWAY_FLAVOR) \
-			--listen_port=$(OUTPUT_GATEWAY_PORT) $(OUTPUT_TUNING_FLAGS) --logtostderr --logbufsecs=0 \
+			--resume_file=$(NODE_DIR)/output_resume_all \
+			--brpc_port=$(OUTPUT_BRPC_PORT) --grpc_port=$(OUTPUT_GRPC_PORT) \
+			--websocket_port=$(OUTPUT_WEBSOCKET_PORT) $(OUTPUT_TUNING_FLAGS) \
+			--logtostderr --logbufsecs=0 \
 			> $(NODE_DIR)/output_gateway.log 2>&1 < /dev/null & echo \$$! > $(APP)_output_gateway.pid"
 endif
 
@@ -367,22 +379,26 @@ sweep-output:
 		"OUTPUT_OBSERVER=$(OUTPUT_GATEWAY_FLAVOR) OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$(OUTPUT_GATEWAY_PORT)" \
 		$(SWEEP_RATES)
 
-## All three flavors, appended into one CSV. Only one output gateway
-## can run at a time (they share OUTPUT_GATEWAY_PORT and one pidfile —
-## see OUTPUT_GATEWAY_FLAVOR's own comment), so each flavor gets a
-## full stop/clean-data/start cycle of its own first: a fresh journal
-## per flavor is also what keeps each flavor's "achieved rate" about
-## that flavor's own traffic alone (README.md's "One sweep at a time,
-## from a clean journal").
+## All three flavors, appended into one CSV — now against ONE cluster
+## lifetime, because one gateway process serves all three protocols at
+## once. Previously each flavor needed its own stop/clean-data/start
+## cycle (they shared a port and a pidfile), which meant the three
+## flavors' numbers came from three different runs and carried
+## run-to-run variance into every cross-flavor comparison. They now
+## share a journal, a codec pass and a ring, and differ only in which
+## protocol the load generator subscribes over.
 sweep-output-all:
 	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_OUTPUT_CSV)
+	$(MAKE) stop >/dev/null 2>&1 || true
+	$(MAKE) clean-data >/dev/null 2>&1
+	$(MAKE) start OUTPUT_GATEWAY_FLAVOR=brpc >/dev/null 2>&1
+	sleep 5
 	for f in grpc brpc websocket; do \
-		$(MAKE) stop >/dev/null 2>&1 || true; \
-		$(MAKE) clean-data >/dev/null 2>&1; \
-		$(MAKE) start OUTPUT_GATEWAY_FLAVOR=$$f >/dev/null 2>&1; \
-		sleep 5; \
 		./sweep-output.sh $$f "$(abspath $(SWEEP_OUTPUT_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
-			"OUTPUT_OBSERVER=$$f OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$(OUTPUT_GATEWAY_PORT)" \
+			"OUTPUT_OBSERVER=$$f OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$$(case $$f in \
+				brpc) echo $(OUTPUT_BRPC_PORT);; \
+				grpc) echo $(OUTPUT_GRPC_PORT);; \
+				websocket) echo $(OUTPUT_WEBSOCKET_PORT);; esac)" \
 			$(SWEEP_RATES) ; \
 	done
 
