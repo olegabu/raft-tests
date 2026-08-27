@@ -271,6 +271,116 @@ actually produces the gateway's own knee is not established here;
 profiling it the way `gateway/output/` was profiled is the obvious
 next step.
 
+## Does hardware move any of this? Four instance types say no
+
+Everything above is one fleet. The obvious question is whether a
+different one moves the numbers, so the same sweep was run on four
+instance types — all 3-node multi-AZ, all the same code, all within
+the account's 64 vCPU on-demand quota.
+
+![sequencer ack path across four instance types](fleet-instance-types.svg)
+
+| fleet | silicon | p50 @ 100k | last healthy rate | peak achieved |
+|---|---|---|---|---|
+| **c7a.2xlarge** (8 vCPU) | AMD Genoa 3.7 GHz | **1088 µs** | 130k | ~133k |
+| c7a.4xlarge (16 vCPU) | AMD Genoa 3.7 GHz | 1048 µs | 125k | ~133k |
+| c6in.4xlarge (16 vCPU) | Intel Ice Lake 2.9 GHz, network-optimised | 1126 µs | 100k | ~111k |
+| c7i.4xlarge (16 vCPU) | Intel Sapphire Rapids | 1398 µs | 150k | ~171k |
+
+**Doubling the cores changed nothing.** c7a at 16 vCPU is no better
+than at 8, and the reason is not subtle: sampled at 125k, right at the
+knee, the raft **leader was 99.6% idle** and the client box 61.8%
+idle. Whatever sets this ceiling, it is not CPU, so no amount of it
+helps.
+
+**The network-optimised instance was a bad bet.** `c6in` was chosen
+deliberately — the input gateway's profile is dominated by socket
+syscalls and thread wakeups, and this workload is small-packet and
+high-PPS, so a high-PPS instance looked like the targeted answer. It
+produced the *lowest* ceiling of the four (~111k). Ice Lake's slower
+cores cost more than the network optimisation returned.
+
+**c7i trades latency for headroom**: the worst p50 of the four but the
+only fleet to get past 150k. That trade is real and not a measurement
+artifact — `make node-rtt` puts its leader-to-faster-follower RTT at
+504 µs against c7a's 535 µs, so it had the *better* network path and
+was still slower per request.
+
+Recording that RTT is worth doing on every fleet. Restarting instances
+can land them on different physical paths, and the spread here
+(387-843 µs across fleets over time) is large enough to swamp the
+effect being measured. An earlier draft of this section blamed c7i's
+latency on placement; measuring showed that was wrong.
+
+### Ack and dissemination, from the same runs
+
+The round-trip table above draws its ack from `make sweep` (no
+observer) and its dissemination from `make sweep-output` (necessarily
+with one), and those are not comparable — see the observer caveat
+there. Extracting both percentiles from the *same* load-generator runs
+removes that problem entirely:
+
+![ack vs dissemination in the same runs](fleet-ack-vs-dissemination.svg)
+
+| rate | ack | dissemination | faster |
+|---|---|---|---|
+| 25k | **620 µs** | 679 µs | ack by 59 µs |
+| 50k | **720 µs** | 755 µs | ack by 35 µs |
+| 75k | **799 µs** | 818 µs | ack by 19 µs |
+| 100k | 883 µs | **858 µs** | dissemination by 25 µs |
+| 120k | 1009 µs | **954 µs** | dissemination by 55 µs |
+| 130k | 1251 µs | **1178 µs** | dissemination by 73 µs |
+
+**They cross over near 85k**, and that explains a comparison that
+otherwise looks contradictory. Below the crossover the ack is faster:
+dissemination pays a journal tail plus an extra hop, and the gateway
+is unloaded so the ack's return leg is cheap. Above it the ack pays
+the loaded gateway *twice*, inbound and outbound, while dissemination
+never returns through it — so the gap opens as load rises. Both
+collapse together at 140k.
+
+This is also the best sequencer configuration measured anywhere in
+this repo — c7a.2xlarge with the brpc output gateway, ack
+sub-millisecond through 110k and dissemination through 120k — and it
+is the *cheapest* fleet of the four.
+
+### Aeron is the one product that cares which vendor
+
+Not sequencer, but it came out of the same exercise and is the
+clearest hardware finding here:
+
+![Aeron across vendors](fleet-aeron-vendor.svg)
+
+| fleet | p50 @ 100k | flat through | peak achieved |
+|---|---|---|---|
+| c6i.2xlarge (Intel Ice Lake) | 487 µs | 400k | ~640k |
+| c7a.2xlarge (AMD Genoa) | 522 µs | **250k** | ~420k |
+| c6in.4xlarge (Intel Ice Lake) | 580 µs | **600k** | ~655k |
+| c7i.4xlarge (Intel Sapphire Rapids) | 650 µs | 400k | ~645k |
+
+AMD steps up at 290k to ~2.1 ms and never recovers; both Intel fleets
+stay flat past 400k, with `c6in` holding sub-millisecond to 600k.
+braft and openraft both *improved* on the same AMD move, so this is
+specific to Aeron — plausibly its heavy busy-spinning and
+shared-memory buffers being more exposed to the memory subsystem, but
+that is a hypothesis, not something these sweeps demonstrate.
+**If you run Aeron, run it on Intel.**
+
+### Reproducing these
+
+Raw per-fleet CSVs are in [`fleets/`](fleets/), one per instance type,
+in the same 10-column shape as every other sweep here. The three
+charts regenerate from them with:
+
+```sh
+python3 ../sweep/mkcharts-fleets.py
+```
+
+That script is separate from `../sweep/mkcharts.py` on purpose: the
+latter asks how one product behaves as load rises on one fleet, these
+ask how one product behaves across fleets, which needs a series per
+fleet rather than per product.
+
 ## Sweeping for the knee, and regenerating the chart
 
 `make sweep-all` runs all five sweeps and `make charts-all` renders

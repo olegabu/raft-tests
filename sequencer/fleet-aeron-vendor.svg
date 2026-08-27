@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="496" viewBox="0 0 940 496" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="Aeron regressed on AMD and recovers on Intel">
+<rect width="940" height="496" fill="#fcfcfb"/>
+<text x="84" y="30" font-size="16" font-weight="600" fill="#0b0b0b">Aeron regressed on AMD and recovers on Intel</text>
+<text x="84" y="50" font-size="12" fill="#52514e">p50 vs offered rate, same Aeron Cluster build and 3-node multi-AZ layout throughout. Log scale.</text>
+<text x="84" y="66" font-size="12" fill="#52514e">AMD Genoa steps up at 290k and never recovers; both Intel fleets stay flat past 400k.</text>
+<text x="84" y="82" font-size="12" fill="#52514e">Hollow marker = the cluster fell behind the offered rate.</text>
+<line x1="84" y1="373.6" x2="896" y2="373.6" stroke="#e1e0d9"/>
+<text x="74" y="377.6" font-size="11" fill="#898781" text-anchor="end">500 us</text>
+<line x1="84" y1="338.2" x2="896" y2="338.2" stroke="#e1e0d9"/>
+<text x="74" y="342.2" font-size="11" fill="#898781" text-anchor="end">700 us</text>
+<line x1="84" y1="300.7" x2="896" y2="300.7" stroke="#e1e0d9"/>
+<text x="74" y="304.7" font-size="11" fill="#898781" text-anchor="end">1 ms</text>
+<line x1="84" y1="227.7" x2="896" y2="227.7" stroke="#e1e0d9"/>
+<text x="74" y="231.7" font-size="11" fill="#898781" text-anchor="end">2 ms</text>
+<line x1="84" y1="131.2" x2="896" y2="131.2" stroke="#e1e0d9"/>
+<text x="74" y="135.2" font-size="11" fill="#898781" text-anchor="end">5 ms</text>
+<line x1="84" y1="392" x2="896" y2="392" stroke="#c3c2b7"/>
+<line x1="84.0" y1="392" x2="84.0" y2="397" stroke="#c3c2b7"/>
+<text x="84.0" y="412" font-size="11" fill="#898781" text-anchor="middle">0k</text>
+<line x1="196.8" y1="392" x2="196.8" y2="397" stroke="#c3c2b7"/>
+<text x="196.8" y="412" font-size="11" fill="#898781" text-anchor="middle">100k</text>
+<line x1="309.6" y1="392" x2="309.6" y2="397" stroke="#c3c2b7"/>
+<text x="309.6" y="412" font-size="11" fill="#898781" text-anchor="middle">200k</text>
+<line x1="422.3" y1="392" x2="422.3" y2="397" stroke="#c3c2b7"/>
+<text x="422.3" y="412" font-size="11" fill="#898781" text-anchor="middle">300k</text>
+<line x1="535.1" y1="392" x2="535.1" y2="397" stroke="#c3c2b7"/>
+<text x="535.1" y="412" font-size="11" fill="#898781" text-anchor="middle">400k</text>
+<line x1="647.9" y1="392" x2="647.9" y2="397" stroke="#c3c2b7"/>
+<text x="647.9" y="412" font-size="11" fill="#898781" text-anchor="middle">500k</text>
+<line x1="760.7" y1="392" x2="760.7" y2="397" stroke="#c3c2b7"/>
+<text x="760.7" y="412" font-size="11" fill="#898781" text-anchor="middle">600k</text>
+<line x1="873.4" y1="392" x2="873.4" y2="397" stroke="#c3c2b7"/>
+<text x="873.4" y="412" font-size="11" fill="#898781" text-anchor="middle">700k</text>
+<text x="490" y="436" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>
+<defs><clipPath id="p"><rect x="78" y="106" width="824" height="292"/></clipPath></defs>
+<g clip-path="url(#p)">
+<path d="M112.2,369.3 L140.4,379.5 L196.8,376.4 L241.9,379.3 L281.4,375.6 L320.8,375.6 L365.9,372.6 L411.1,369.3 L450.5,365.3 L490.0,365.7 L535.1,366.1 L602.8,354.4 L670.4,303.1 L738.1,304.1 L805.8,309.1" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="112.2" cy="369.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="140.4" cy="379.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="196.8" cy="376.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="241.9" cy="379.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="281.4" cy="375.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="320.8" cy="375.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="365.9" cy="372.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="411.1" cy="369.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="450.5" cy="365.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="490.0" cy="365.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="535.1" cy="366.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="602.8" cy="354.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="670.4" cy="303.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="738.1" cy="304.1" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="805.8" cy="309.1" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
+<path d="M112.2,365.0 L140.4,374.7 L196.8,369.1 L241.9,368.1 L281.4,367.3 L320.8,366.3 L365.9,361.9 L411.1,220.8 L450.5,221.1 L490.0,224.8 L535.1,240.8 L602.8,212.0 L670.4,203.6 L738.1,226.8 L805.8,209.4" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="112.2" cy="365.0" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="140.4" cy="374.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="196.8" cy="369.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="241.9" cy="368.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="281.4" cy="367.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="320.8" cy="366.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="365.9" cy="361.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="411.1" cy="220.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="450.5" cy="221.1" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="490.0" cy="224.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="535.1" cy="240.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="602.8" cy="212.0" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="670.4" cy="203.6" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="738.1" cy="226.8" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="805.8" cy="209.4" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<path d="M196.8,358.0 L309.6,351.7 L422.3,346.5 L535.1,343.5 L647.9,320.5 L760.7,308.8 L873.4,262.0" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="196.8" cy="358.0" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="309.6" cy="351.7" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="422.3" cy="346.5" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="535.1" cy="343.5" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="647.9" cy="320.5" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="760.7" cy="308.8" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="873.4" cy="262.0" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
+<path d="M196.8,346.0 L309.6,377.5 L422.3,383.3 L535.1,377.1 L647.9,281.9 L760.7,295.1 L873.4,263.3" fill="none" stroke="#b5179e" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="196.8" cy="346.0" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="309.6" cy="377.5" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="422.3" cy="383.3" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="535.1" cy="377.1" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="647.9" cy="281.9" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="760.7" cy="295.1" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="873.4" cy="263.3" r="4.5" fill="#fcfcfb" stroke="#b5179e" stroke-width="2"/>
+</g>
+<circle cx="89" cy="462" r="4.5" fill="#2a78d6"/>
+<text x="100" y="466" font-size="11" fill="#52514e">c6i.2xlarge (Intel Ice Lake, 8 vCPU)</text>
+<circle cx="343.79999999999995" cy="462" r="4.5" fill="#eb6834"/>
+<text x="354.79999999999995" y="466" font-size="11" fill="#52514e">c7a.2xlarge (AMD Genoa, 8 vCPU)</text>
+<circle cx="567.0999999999999" cy="462" r="4.5" fill="#1baf7a"/>
+<text x="578.0999999999999" y="466" font-size="11" fill="#52514e">c6in.4xlarge (Intel Ice Lake, network-optimised)</text>
+<circle cx="89" cy="479" r="4.5" fill="#b5179e"/>
+<text x="100" y="483" font-size="11" fill="#52514e">c7i.4xlarge (Intel Sapphire Rapids)</text>
+</svg>

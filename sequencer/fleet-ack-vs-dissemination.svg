@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="496" viewBox="0 0 940 496" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="Ack vs dissemination, measured in the same runs - they cross over near 85k">
+<rect width="940" height="496" fill="#fcfcfb"/>
+<text x="84" y="30" font-size="16" font-weight="600" fill="#0b0b0b">Ack vs dissemination, measured in the same runs - they cross over near 85k</text>
+<text x="84" y="50" font-size="12" fill="#52514e">c7a.2xlarge (AMD Genoa, 8 vCPU), brpc output gateway. Leader-to-faster-follower RTT 535 us.</text>
+<text x="84" y="66" font-size="12" fill="#52514e">Both p50s come from one load-generator run per rate, so this carries no observer-effect confound.</text>
+<text x="84" y="82" font-size="12" fill="#52514e">Below ~85k the ack wins: dissemination pays a journal tail plus a hop, and the gateway is unloaded.</text>
+<text x="84" y="98" font-size="12" fill="#52514e">Above it the ack pays the loaded gateway twice, inbound and outbound. Both collapse together at 140k.</text>
+<rect x="84" y="314.1" width="812" height="77.9" fill="#f0efec"/>
+<text x="92" y="329.1" font-size="11" fill="#898781">at or below 1 ms</text>
+<line x1="84" y1="382.7" x2="896" y2="382.7" stroke="#e1e0d9"/>
+<text x="74" y="386.7" font-size="11" fill="#898781" text-anchor="end">600 us</text>
+<line x1="84" y1="344.1" x2="896" y2="344.1" stroke="#e1e0d9"/>
+<text x="74" y="348.1" font-size="11" fill="#898781" text-anchor="end">800 us</text>
+<line x1="84" y1="314.1" x2="896" y2="314.1" stroke="#e1e0d9"/>
+<text x="74" y="318.1" font-size="11" fill="#898781" text-anchor="end">1000 us</text>
+<line x1="84" y1="259.7" x2="896" y2="259.7" stroke="#e1e0d9"/>
+<text x="74" y="263.7" font-size="11" fill="#898781" text-anchor="end">1500 us</text>
+<line x1="84" y1="221.1" x2="896" y2="221.1" stroke="#e1e0d9"/>
+<text x="74" y="225.1" font-size="11" fill="#898781" text-anchor="end">2000 us</text>
+<line x1="84" y1="166.6" x2="896" y2="166.6" stroke="#e1e0d9"/>
+<text x="74" y="170.6" font-size="11" fill="#898781" text-anchor="end">3000 us</text>
+<line x1="84" y1="392" x2="896" y2="392" stroke="#c3c2b7"/>
+<line x1="84.0" y1="392" x2="84.0" y2="397" stroke="#c3c2b7"/>
+<text x="84.0" y="412" font-size="11" fill="#898781" text-anchor="middle">0k</text>
+<line x1="224.0" y1="392" x2="224.0" y2="397" stroke="#c3c2b7"/>
+<text x="224.0" y="412" font-size="11" fill="#898781" text-anchor="middle">25k</text>
+<line x1="364.0" y1="392" x2="364.0" y2="397" stroke="#c3c2b7"/>
+<text x="364.0" y="412" font-size="11" fill="#898781" text-anchor="middle">50k</text>
+<line x1="504.0" y1="392" x2="504.0" y2="397" stroke="#c3c2b7"/>
+<text x="504.0" y="412" font-size="11" fill="#898781" text-anchor="middle">75k</text>
+<line x1="644.0" y1="392" x2="644.0" y2="397" stroke="#c3c2b7"/>
+<text x="644.0" y="412" font-size="11" fill="#898781" text-anchor="middle">100k</text>
+<line x1="784.0" y1="392" x2="784.0" y2="397" stroke="#c3c2b7"/>
+<text x="784.0" y="412" font-size="11" fill="#898781" text-anchor="middle">125k</text>
+<text x="490" y="436" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>
+<line x1="571.2" y1="128" x2="571.2" y2="392" stroke="#898781" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="577.2" y="144" font-size="11" font-weight="600" fill="#52514e">crossover</text>
+<defs><clipPath id="p"><rect x="78" y="122" width="824" height="276"/></clipPath></defs>
+<g clip-path="url(#p)">
+<path d="M224.0,378.3 L364.0,358.3 L504.0,344.3 L644.0,330.9 L700.0,323.5 L756.0,312.9 L812.0,284.1 L868.0,-584.2" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="224.0" cy="378.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="364.0" cy="358.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="504.0" cy="344.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="644.0" cy="330.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="700.0" cy="323.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="756.0" cy="312.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="812.0" cy="284.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="868.0" cy="-584.2" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
+<path d="M224.0,366.1 L364.0,351.9 L504.0,341.1 L644.0,334.7 L700.0,328.9 L756.0,320.5 L812.0,292.1 L868.0,-585.4" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="224.0" cy="366.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="364.0" cy="351.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="504.0" cy="341.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="644.0" cy="334.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="700.0" cy="328.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="756.0" cy="320.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="812.0" cy="292.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="868.0" cy="-585.4" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+</g>
+<circle cx="89" cy="462" r="4.5" fill="#2a78d6"/>
+<text x="100" y="466" font-size="11" fill="#52514e">synchronous ack</text>
+<circle cx="211.5" cy="462" r="4.5" fill="#eb6834"/>
+<text x="222.5" y="466" font-size="11" fill="#52514e">dissemination (brpc output gateway)</text>
+</svg>

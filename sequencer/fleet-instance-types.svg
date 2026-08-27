@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="496" viewBox="0 0 940 496" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="sequencer ack path across four instance types">
+<rect width="940" height="496" fill="#fcfcfb"/>
+<text x="84" y="30" font-size="16" font-weight="600" fill="#0b0b0b">sequencer ack path across four instance types</text>
+<text x="84" y="50" font-size="12" fill="#52514e">p50 vs offered rate, 3-node multi-AZ, identical code and sweep throughout. Log scale.</text>
+<text x="84" y="66" font-size="12" fill="#52514e">No instance type broke the ~1 ms floor. c7i reaches the highest rate, c6in the lowest,</text>
+<text x="84" y="82" font-size="12" fill="#52514e">and 16 vCPU is no better than 8 - at the knee the raft leader measured 99.6% idle.</text>
+<text x="84" y="98" font-size="12" fill="#52514e">Hollow marker = the cluster fell behind the offered rate.</text>
+<rect x="84" y="370.3" width="812" height="21.7" fill="#f0efec"/>
+<text x="92" y="385.3" font-size="11" fill="#898781">at or below 1 ms</text>
+<line x1="84" y1="370.3" x2="896" y2="370.3" stroke="#e1e0d9"/>
+<text x="74" y="374.3" font-size="11" fill="#898781" text-anchor="end">1 ms</text>
+<line x1="84" y1="340.9" x2="896" y2="340.9" stroke="#e1e0d9"/>
+<text x="74" y="344.9" font-size="11" fill="#898781" text-anchor="end">2 ms</text>
+<line x1="84" y1="301.9" x2="896" y2="301.9" stroke="#e1e0d9"/>
+<text x="74" y="305.9" font-size="11" fill="#898781" text-anchor="end">5 ms</text>
+<line x1="84" y1="243.0" x2="896" y2="243.0" stroke="#e1e0d9"/>
+<text x="74" y="247.0" font-size="11" fill="#898781" text-anchor="end">20 ms</text>
+<line x1="84" y1="174.7" x2="896" y2="174.7" stroke="#e1e0d9"/>
+<text x="74" y="178.7" font-size="11" fill="#898781" text-anchor="end">100 ms</text>
+<line x1="84" y1="392" x2="896" y2="392" stroke="#c3c2b7"/>
+<line x1="84.0" y1="392" x2="84.0" y2="397" stroke="#c3c2b7"/>
+<text x="84.0" y="412" font-size="11" fill="#898781" text-anchor="middle">0k</text>
+<line x1="277.3" y1="392" x2="277.3" y2="397" stroke="#c3c2b7"/>
+<text x="277.3" y="412" font-size="11" fill="#898781" text-anchor="middle">50k</text>
+<line x1="470.7" y1="392" x2="470.7" y2="397" stroke="#c3c2b7"/>
+<text x="470.7" y="412" font-size="11" fill="#898781" text-anchor="middle">100k</text>
+<line x1="664.0" y1="392" x2="664.0" y2="397" stroke="#c3c2b7"/>
+<text x="664.0" y="412" font-size="11" fill="#898781" text-anchor="middle">150k</text>
+<line x1="857.3" y1="392" x2="857.3" y2="397" stroke="#c3c2b7"/>
+<text x="857.3" y="412" font-size="11" fill="#898781" text-anchor="middle">200k</text>
+<text x="490" y="436" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>
+<defs><clipPath id="p"><rect x="78" y="122" width="824" height="276"/></clipPath></defs>
+<g clip-path="url(#p)">
+<path d="M122.7,394.0 L180.7,391.0 L238.7,386.0 L296.7,382.5 L354.7,375.1 L412.7,371.3 L470.7,366.7 L509.3,365.3 L528.7,366.3 L548.0,364.7 L567.3,360.9 L586.7,355.1 L644.7,100.1 L702.7,45.3" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="122.7" cy="394.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="180.7" cy="391.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="238.7" cy="386.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="296.7" cy="382.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="354.7" cy="375.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="412.7" cy="371.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="470.7" cy="366.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="509.3" cy="365.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="528.7" cy="366.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="548.0" cy="364.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="567.3" cy="360.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="586.7" cy="355.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="644.7" cy="100.1" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="702.7" cy="45.3" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
+<path d="M180.7,385.8 L277.3,379.6 L374.0,373.9 L470.7,368.3 L567.3,315.6 L664.0,35.9 L760.7,6.0 L857.3,-10.2" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="180.7" cy="385.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="277.3" cy="379.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="374.0" cy="373.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="470.7" cy="368.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="567.3" cy="315.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="664.0" cy="35.9" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="760.7" cy="6.0" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="857.3" cy="-10.2" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<path d="M180.7,382.7 L277.3,376.3 L374.0,371.9 L470.7,365.3 L528.7,88.4 L567.3,51.5 L606.0,22.7 L664.0,5.3 L760.7,-13.2 L857.3,-28.7" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="180.7" cy="382.7" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="277.3" cy="376.3" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="374.0" cy="371.9" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="470.7" cy="365.3" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="528.7" cy="88.4" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="567.3" cy="51.5" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="606.0" cy="22.7" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="664.0" cy="5.3" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="760.7" cy="-13.2" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="857.3" cy="-28.7" r="4.5" fill="#fcfcfb" stroke="#1baf7a" stroke-width="2"/>
+<path d="M180.7,360.2 L277.3,359.3 L374.0,358.3 L470.7,356.1 L528.7,354.0 L567.3,352.0 L606.0,351.0 L664.0,346.8 L760.7,108.1 L857.3,40.3" fill="none" stroke="#b5179e" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="180.7" cy="360.2" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="277.3" cy="359.3" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="374.0" cy="358.3" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="470.7" cy="356.1" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="528.7" cy="354.0" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="567.3" cy="352.0" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="606.0" cy="351.0" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="664.0" cy="346.8" r="4.5" fill="#b5179e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="760.7" cy="108.1" r="4.5" fill="#fcfcfb" stroke="#b5179e" stroke-width="2"/>
+<circle cx="857.3" cy="40.3" r="4.5" fill="#fcfcfb" stroke="#b5179e" stroke-width="2"/>
+</g>
+<circle cx="89" cy="462" r="4.5" fill="#2a78d6"/>
+<text x="100" y="466" font-size="11" fill="#52514e">c7a.2xlarge (AMD Genoa, 8 vCPU)</text>
+<circle cx="312.29999999999995" cy="462" r="4.5" fill="#eb6834"/>
+<text x="323.29999999999995" y="466" font-size="11" fill="#52514e">c7a.4xlarge (AMD Genoa, 16 vCPU)</text>
+<circle cx="541.9" cy="462" r="4.5" fill="#1baf7a"/>
+<text x="552.9" y="466" font-size="11" fill="#52514e">c6in.4xlarge (Intel Ice Lake, network-optimised)</text>
+<circle cx="89" cy="479" r="4.5" fill="#b5179e"/>
+<text x="100" y="483" font-size="11" fill="#52514e">c7i.4xlarge (Intel Sapphire Rapids)</text>
+</svg>

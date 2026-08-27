@@ -130,6 +130,9 @@ INPUT_MAX_BATCH ?=
 INPUT_MAX_INFLIGHT_BATCHES ?=
 INPUT_BATCH_FLAGS = $(if $(INPUT_MAX_BATCH),--max_batch_size=$(INPUT_MAX_BATCH),) \
                     $(if $(INPUT_MAX_INFLIGHT_BATCHES),--max_inflight_batches=$(INPUT_MAX_INFLIGHT_BATCHES),)
+# Escape hatch for any other brpc gflag on the gateway process, e.g.
+# INPUT_GATEWAY_EXTRA=--event_dispatcher_num=4.
+INPUT_GATEWAY_EXTRA ?=
 
 MODE     ?= open
 THREADS  ?= 100
@@ -240,7 +243,7 @@ start:
 		"cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }; \
 		 rm -f $(APP)_input_gateway.pid; sleep 1; \
 		 nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
-			--listen_port=$(INPUT_GATEWAY_PORT) $(INPUT_GATEWAY_CONCURRENCY_FLAG) $(INPUT_BATCH_FLAGS) \
+			--listen_port=$(INPUT_GATEWAY_PORT) $(INPUT_GATEWAY_CONCURRENCY_FLAG) $(INPUT_BATCH_FLAGS) $(INPUT_GATEWAY_EXTRA) \
 			--logtostderr --logbufsecs=0 \
 			> std.log 2>&1 < /dev/null & echo \$$! > $(APP)_input_gateway.pid"
 ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
