@@ -110,6 +110,44 @@ within noise (brpc +1-3%, gRPC +1%) and WebSocket is 6-9% *faster*
 across the range, which is where the text-to-binary framing fix shows
 up: text frames made Beast UTF-8-validate every write.
 
+### Reading the table: what each round trip does and does not include
+
+All six start from the *same* client send timestamp. They differ in
+where they stop, and — importantly — in how much of the input gateway
+they pay for:
+
+- **Every row except the control passes through the input gateway on
+  the way in.** The output-gateway rows are not gateway-free: their
+  submissions go through `--input_gateway_addr` exactly like the ack's.
+- **Only the ack pays for it twice.** Dissemination goes node →
+  journal → output gateway (colocated with the node) → subscriber; it
+  never travels back through the input gateway. That asymmetry is why
+  the output flavors could sit below the ack path even though both
+  include the gateway inbound — the ack's return leg was queueing
+  behind a saturated gateway, and the dissemination path simply
+  wasn't there.
+
+Now that the gateway batches, the two have converged. Measured in the
+*same runs* on one fleet at 100k:
+
+| | ack p50 | dissemination p50 |
+|---|---|---|
+| output: brpc | 879 µs | 869 µs |
+| output: gRPC | 904 µs | 876 µs |
+| output: WebSocket | 914 µs | 911 µs |
+
+**A measurement caveat that cuts across the tables.** The ack path
+reads faster when an observer is attached to the same load generator:
+on this fleet, at this instant, 1063-1076 µs with `make client` alone
+against 879-914 µs in the runs above. That is reproducible and still
+unexplained (it was noted earlier when the direct-arm work first hit
+it, and ruling out node-side CPU idle states did not account for it).
+It matters here because the sweep tables are built from `make sweep`
+runs *without* an observer while every output-gateway number
+necessarily comes from a run *with* one. Compare ack against
+dissemination within a single run — as the small table above does —
+rather than across the sweeps.
+
 Two things worth stating plainly, because the headline is easy to
 overstate:
 
