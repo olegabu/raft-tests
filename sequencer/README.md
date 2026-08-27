@@ -95,20 +95,34 @@ configuration, and swept further than the shared axes show.
 | round trip | p50 @ 100k | p99 @ 100k | last rate with p50 < 2 ms |
 |---|---|---|---|
 | synchronous ack | 1088 µs | 4835 µs | 130k |
-| *(control)* direct to node, no gateway | *727 µs* | *2389 µs* | *250k+* |
+| *(control)* direct to node, no gateway | ***727 µs*** | *2389 µs* | *250k* |
 | relay gateway (gRPC) | **986 µs** | 2307 µs | 120k |
-| output gateway, brpc | **855 µs** | 1876 µs | 120k |
-| output gateway, gRPC | **864 µs** | 1785 µs | 115k |
-| output gateway, WebSocket | **892 µs** | 3877 µs | 120k |
+| output gateway, brpc | **910 µs** | 2935 µs | 130k |
+| output gateway, gRPC | **903 µs** | 1987 µs | 125k |
+| output gateway, WebSocket | **932 µs** | 3337 µs | 130k |
 
-The three output flavors are now served by **one gateway process** on
+Every row here was re-measured after the input gateway learned to
+batch proposals, since all of them except the control submit through
+it. The output flavors moved in a direction worth naming:
+
+| flavor | p50 @ 100k | last rate with p50 < 2 ms |
+|---|---|---|
+| brpc | 855 → 910 µs | 120k → 130k |
+| gRPC | 864 → 903 µs | 115k → 125k |
+| WebSocket | 892 → 932 µs | 120k → 130k |
+
+**Each got ~45 µs slower at 100k and ~10k more headroom.** That is the
+batching trade seen from the dissemination side, and it follows from
+the asymmetry above: a dissemination pays only the gateway's *inbound*
+leg, where grouping adds a little latency, and gets none of the
+return-leg saving that makes the ack a clear win. What it does get is
+the gateway no longer saturating, which is where the extra headroom
+comes from. All three remain comfortably sub-millisecond.
+
+The three output flavors are served by **one gateway process** on
 three ports, sharing a single journal tail, codec pass and ring — so
-unlike every earlier sweep, their rows come from the same cluster
-lifetime and the same traffic rather than three separate runs. Against
-the previous three-process numbers, the comfort zone is unchanged
-within noise (brpc +1-3%, gRPC +1%) and WebSocket is 6-9% *faster*
-across the range, which is where the text-to-binary framing fix shows
-up: text frames made Beast UTF-8-validate every write.
+unlike the earliest sweeps, their rows come from the same cluster
+lifetime and the same traffic rather than three separate runs.
 
 ### Reading the table: what each round trip does and does not include
 
@@ -161,9 +175,10 @@ overstate:
   subscriber, while the ack has to travel back through the input
   gateway to the submitting client.
 
-The knee sits at 115-130k across the six, with the gRPC output flavor
-turning earliest and the ack path — since its gateway learned to batch
-proposals — now among the latest. Past it latency goes to whole seconds — the panels
+The knee sits at 120-130k across the five deployable round trips, with
+the relay turning earliest and the ack path — since its gateway
+learned to batch proposals — among the latest. The control arm has no
+knee inside the swept range at all. Past it latency goes to whole seconds — the panels
 clip those points rather than flatten the scale everything else lives
 on. Note the p99 column is noisier than p50 and does not rank the same
 way (gRPC has both the earliest knee and the *best* p99 at 100k); one

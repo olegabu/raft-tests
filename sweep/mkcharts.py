@@ -314,7 +314,7 @@ if len(rt_present) >= 2:
     COLS,ROWS = 3,2
     PANW,PANH = 268,196
     GX,GY = 26,58
-    ML,MT = 62,104
+    ML,MT = 62,124  # MT leaves room for a four-line subtitle above the first panel row
     W = ML + COLS*PANW + (COLS-1)*GX + 24
     # Bottom margin has to clear the last row's tick labels before the
     # x-axis caption; with 5 panels in a 3x2 grid the caption would
@@ -327,8 +327,8 @@ if len(rt_present) >= 2:
     o = head(W,H,f"sequencer: {_n} round trips, p50 and p99",
       ["Every hop this repo measures, same fleet and same sweep. Identical axes across panels; log latency scale.",
        "Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.",
-       "Past the knee, latency runs to whole seconds; those points clip at the panel top. "
-       "The direct-to-node arm was swept further than shown \u2014 see its own chart."])
+       "Past the knee, latency runs to whole seconds; those points clip at the panel top.",
+       "The direct-to-node arm was swept further than these shared axes show \u2014 see its own chart."])
     # Each panel clips its own series: past the knee p50 reaches
     # ~1-2 seconds, and stretching the axis to contain that would
     # squeeze the 500us-2ms range this chart exists to show into a
