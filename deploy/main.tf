@@ -42,6 +42,22 @@ variable "client_instance_type" {
   default     = "c6i.2xlarge"
 }
 
+# More than one client is the input-gateway scale test: a realistic
+# deployment runs several input gateways sharing the traffic to one
+# leader, and a single gateway was measured saturating well below the
+# raft group behind it (see ../sequencer/README.md). Every client lands
+# in the same cluster placement group and AZ as node[0], exactly as the
+# single client always has.
+#
+# Budget: all instances count against the account's on-demand vCPU
+# quota, running ones only. At 8 vCPU each, 3 nodes + 5 clients = 64,
+# which is the whole quota — see ../README.md's instance-types note.
+variable "client_count" {
+  description = "Number of load-generator/input-gateway boxes"
+  type        = number
+  default     = 1
+}
+
 variable "ssh_ingress_cidr" {
   description = "CIDR allowed to ssh in, e.g. 203.0.113.5/32"
   type        = string
@@ -199,9 +215,31 @@ resource "aws_instance" "node" {
   tags = {
     Name = "raft-node-${count.index}"
   }
+
+  # data.aws_ami.ubuntu tracks Canonical's *latest* image, so every time
+  # they publish one, an otherwise-unrelated apply wants to replace every
+  # instance in the fleet — destroying pushed binaries, the JDK aeron
+  # needs, and each product's data dir, for a benchmark that gains
+  # nothing from a newer patch level. Caught exactly that way: adding a
+  # client turned into "4 to add, 4 to destroy". A fresh fleet still gets
+  # the current image; an existing one keeps what it booted with, which
+  # is also what makes results comparable across sessions.
+  lifecycle {
+    ignore_changes = [ami]
+  }
+}
+
+# Adding count to a resource that used to be single renames it in
+# state (aws_instance.client -> aws_instance.client[0]); without the
+# moved block below terraform would destroy and recreate the existing
+# client, losing its pushed binaries for no reason.
+moved {
+  from = aws_instance.client
+  to   = aws_instance.client[0]
 }
 
 resource "aws_instance" "client" {
+  count             = var.client_count
   ami               = data.aws_ami.ubuntu.id
   instance_type     = var.client_instance_type
   availability_zone = local.client_az
@@ -213,7 +251,19 @@ resource "aws_instance" "client" {
   vpc_security_group_ids = [aws_security_group.raft.id]
 
   tags = {
-    Name = "raft-client"
+    Name = "raft-client-${count.index}"
+  }
+
+  # data.aws_ami.ubuntu tracks Canonical's *latest* image, so every time
+  # they publish one, an otherwise-unrelated apply wants to replace every
+  # instance in the fleet — destroying pushed binaries, the JDK aeron
+  # needs, and each product's data dir, for a benchmark that gains
+  # nothing from a newer patch level. Caught exactly that way: adding a
+  # client turned into "4 to add, 4 to destroy". A fresh fleet still gets
+  # the current image; an existing one keeps what it booted with, which
+  # is also what makes results comparable across sessions.
+  lifecycle {
+    ignore_changes = [ami]
   }
 }
 
@@ -226,7 +276,15 @@ output "node_private_ips" {
 }
 
 output "client_public_ip" {
-  value = aws_instance.client.public_ip
+  value = aws_instance.client[0].public_ip
+}
+
+output "client_public_ips" {
+  value = aws_instance.client[*].public_ip
+}
+
+output "client_private_ips" {
+  value = aws_instance.client[*].private_ip
 }
 
 # Rendered .env for the Makefile: `make env` writes this to ../.env
@@ -238,7 +296,9 @@ output "env_file" {
     NODE1_PRIV=${aws_instance.node[0].private_ip}
     NODE2_PRIV=${aws_instance.node[1].private_ip}
     NODE3_PRIV=${aws_instance.node[2].private_ip}
-    CLIENT=${aws_instance.client.public_ip}
+    CLIENT=${aws_instance.client[0].public_ip}
+    CLIENTS=${join(" ", aws_instance.client[*].public_ip)}
+    CLIENTS_PRIV=${join(" ", aws_instance.client[*].private_ip)}
     SSH_USER=ubuntu
     SSH_KEY=${replace(var.ssh_public_key_path, ".pub", "")}
     SSH_INGRESS_CIDR=${var.ssh_ingress_cidr}

@@ -24,10 +24,30 @@ TFVARS    = $(TOPOLOGY).tfvars
 
 .PHONY: deploy plan destroy env node-rtt
 
+# How many load-generator/input-gateway boxes to provision. 1 is the
+# historical fleet. Passed on every apply, so whichever value you use
+# is the value the fleet ends up at — running plain `make deploy` after
+# `make deploy-multi` WILL destroy the extra clients, which is the
+# intended way to shrink back.
+CLIENT_COUNT ?= 1
+
 ## Create/update the EC2 fleet for $(TOPOLOGY) (switch with make deploy TOPOLOGY=single_az)
 deploy:
 	terraform -chdir=deploy init
-	terraform -chdir=deploy apply -var-file=$(TFVARS)
+	terraform -chdir=deploy apply -var-file=$(TFVARS) -var client_count=$(CLIENT_COUNT)
+
+## The input-gateway scale fleet: 3 nodes + $(MULTI_CLIENT_COUNT) clients, every
+## client in the same cluster placement group and AZ as node[0] — the
+## same scheme the single client always used. A separate target because
+## it is a specific experiment (several input gateways sharing traffic
+## to one leader), not the default shape.
+##
+## At 8 vCPU per box this is 3*8 + 5*8 = 64 vCPU, the entire on-demand
+## quota, so nothing else can run alongside it. Shrink back with
+## `make deploy` (CLIENT_COUNT defaults to 1).
+MULTI_CLIENT_COUNT ?= 5
+deploy-multi:
+	$(MAKE) deploy CLIENT_COUNT=$(MULTI_CLIENT_COUNT)
 
 ## Read-only: show what switching to $(TOPOLOGY) would change, without applying
 plan:
