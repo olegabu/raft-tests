@@ -29,7 +29,13 @@ TFVARS    = $(TOPOLOGY).tfvars
 # is the value the fleet ends up at — running plain `make deploy` after
 # `make deploy-multi` WILL destroy the extra clients, which is the
 # intended way to shrink back.
-CLIENT_COUNT ?= 1
+# Default to however many clients terraform state actually has, not a
+# fixed 1: `make env` passes CLIENT_COUNT into a refresh, and refreshing
+# a 5-client fleet with the historical default of 1 renders an .env
+# naming a single client, silently turning a five-gateway sweep into a
+# one-gateway sweep. Falls back to 1 before the first apply, when there
+# is no state to count.
+CLIENT_COUNT ?= $(or $(shell terraform -chdir=deploy state list 2>/dev/null | grep -c '^aws_instance\.client\[' | grep -v '^0$$'),1)
 # aws-cli calls here are region-scoped; deploy/main.tf pins the same one.
 AWS_REGION ?= us-east-1
 

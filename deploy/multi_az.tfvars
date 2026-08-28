@@ -15,5 +15,12 @@ node_azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
 # `aws ec2 modify-instance-attribute`: terraform plans this change as
 # destroy-and-recreate, which would both wipe the disks and briefly
 # need more vCPU than the quota allows.
+# Clients run at 4 vCPU while nodes stay at 8. The five-gateway result
+# (sequencer/multi-gateway-p50.svg) was measured with 8-vCPU clients and
+# 5x8 + 3x8 = 64 vCPU left no headroom at all; at 4 vCPU the same fleet
+# is 5x4 + 3x8 = 44, which is what frees budget for bigger nodes once
+# the quota request clears. Whether 4 cores still carries the load is
+# itself the thing being checked -- each client box runs BOTH a load
+# generator and an input gateway, so they compete for those cores.
 node_instance_type   = "c7a.2xlarge"
-client_instance_type = "c7a.2xlarge"
+client_instance_type = "c7a.xlarge"
