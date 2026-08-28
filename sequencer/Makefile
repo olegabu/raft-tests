@@ -153,7 +153,7 @@ PEERS      = $(NODE1_PRIV):$(PORT):0,$(NODE2_PRIV):$(PORT):0,$(NODE3_PRIV):$(POR
 NODE_DIR   = /data/$(APP)
 CLIENT_DIR = $(APP)
 
-.PHONY: build push start stop clean-data client client-relay client-output logs logs-relay logs-output
+.PHONY: build push push-multi start start-multi stop stop-multi clean-data client client-relay client-output transfer-leader leader logs logs-relay logs-output
 
 ## Build sequencer's Release preset (this is a benchmarking repo — see
 ## sequencer's own README's debug-vs-release note); requires a sibling
@@ -258,6 +258,41 @@ ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 			> $(NODE_DIR)/output_gateway.log 2>&1 < /dev/null & echo \$$! > $(APP)_output_gateway.pid"
 endif
 
+## Push the client-side binaries to EVERY client box, not just
+## CLIENT. `push` targets the single-client topology this repo was
+## built around; the multi-gateway experiment needs the same two
+## binaries on all of $(CLIENTS).
+push-multi: push
+	for h in $(CLIENTS); do \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h "mkdir -p $(CLIENT_DIR)" && \
+		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_input_gateway \
+			$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_load_generator \
+			$(SSH_USER)@$$h:$(CLIENT_DIR)/ ; \
+	done
+
+## `start`, plus one input gateway on every OTHER client box. Each
+## client talks only to the gateway in its own process space
+## (127.0.0.1), so N clients means N independent gateways all
+## proposing to the one leader — which is the deployment shape this
+## measures, and the reason the leader must be NODE1 (see
+## transfer-leader) rather than wherever braft happened to elect.
+start-multi: start
+	for h in $(CLIENTS); do \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h \
+			"cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }; \
+			 rm -f $(APP)_input_gateway.pid; sleep 1; \
+			 nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
+				--listen_port=$(INPUT_GATEWAY_PORT) $(INPUT_GATEWAY_CONCURRENCY_FLAG) $(INPUT_BATCH_FLAGS) $(INPUT_GATEWAY_EXTRA) \
+				--logtostderr --logbufsecs=0 \
+				> std.log 2>&1 < /dev/null & echo \$$! > $(APP)_input_gateway.pid" ; \
+	done
+	@$(MAKE) --no-print-directory transfer-leader
+
+stop-multi: stop
+	for h in $(CLIENTS); do \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h "cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }" ; \
+	done
+
 stop:
 	for h in $(NODES); do \
 		ssh $(SSH_OPTS) $(SSH_USER)@$$h "cd $(NODE_DIR) && { [ -f $(APP)_node.pid ] && kill -TERM \$$(cat $(APP)_node.pid) 2>/dev/null; :; }" ; \
@@ -355,6 +390,37 @@ client-relay:
 client-output:
 	$(MAKE) client OUTPUT_OBSERVER=$(OUTPUT_GATEWAY_FLAVOR) OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$(OUTPUT_GATEWAY_PORT)
 
+## Move leadership to NODE1, which is the node every client box shares
+## an AZ and cluster placement group with (deploy/multi_az.tfvars).
+## braft elects whoever it likes on startup, and a leader on NODE2/NODE3
+## puts a full cross-AZ hop between every input gateway and the leader:
+## measured 1466us p50 at 100k with a remote leader against ~1060us with
+## a local one, on the same fleet. Any comparison across runs has to pin
+## this, so `make start` is not enough on its own.
+##
+## Reuses braft/'s own braft_cli, already pushed to the client box by
+## `make -C ../braft push` — it speaks to any braft group, and
+## counter_node is one.
+transfer-leader:
+	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
+		"cd atomic && ./braft_cli transfer_leader --group=$(GROUP) \
+			--peer=$(NODE1_PRIV):$(PORT):0 --conf='$(PEERS)'"
+	@sleep 2
+	@$(MAKE) --no-print-directory leader
+
+## Print which node currently holds leadership. Reads braft's own
+## /raft_stat page over the node's brpc built-in services rather than
+## the log: the log records elections, so after a transfer it still
+## shows the stale winner, while /raft_stat is current state.
+leader:
+	@for h in $(NODE1) $(NODE2) $(NODE3); do \
+		printf "%-16s " $$h; \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h \
+			"curl -s localhost:$(PORT)/raft_stat | grep -o 'state: [A-Z]*' | head -1" \
+			2>/dev/null || echo "unreachable"; \
+		echo ""; \
+	done
+
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/std.log"
 
@@ -382,7 +448,7 @@ SWEEP_RELAY_CSV ?= seq-relay.csv
 SWEEP_OUTPUT_CSV ?= seq-output.csv
 CHART_DIR       ?= .
 
-.PHONY: sweep sweep-direct sweep-relay sweep-output sweep-output-all sweep-all \
+.PHONY: sweep sweep-multi sweep-multi-baseline sweep-direct sweep-relay sweep-output sweep-output-all sweep-all \
         chart chart-relay chart-output charts charts-all
 
 ## Phase 1's sweep: reuses ../sweep/sweep.sh unmodified, against
@@ -394,6 +460,34 @@ CHART_DIR       ?= .
 sweep:
 	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_CSV)
 	../sweep/sweep.sh sequencer . "$(abspath $(SWEEP_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
+
+## The multi-gateway sweep: the same offered rates, but split across
+## every box in $(CLIENTS), each with its own input gateway, all
+## proposing to the one leader concurrently. Percentiles come from
+## merging every client's raw histogram, not from averaging their
+## reported percentiles — see ../sweep/merge-hdr.py for why that
+## distinction is not pedantry here.
+##
+## Run `make sweep-multi-baseline` first: the N=1 arm has to come off
+## THIS fleet with THIS script, or the comparison is against a
+## differently-placed fleet and measures placement, not gateway count.
+SWEEP_MULTI_CSV ?= seq-multi.csv
+SWEEP_MULTI_BASELINE_CSV ?= seq-multi-baseline.csv
+
+sweep-multi:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_MULTI_CSV)
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) APP=$(APP) INPUT_GATEWAY_PORT=$(INPUT_GATEWAY_PORT) \
+		../sweep/sweep-multi.sh sequencer-multi . "$(abspath $(SWEEP_MULTI_CSV))" \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
+
+## The N=1 control arm, driven through the identical script and the
+## identical rig settings, differing only in how many clients carry
+## the load. Rows are tagged product=sequencer-multi1.
+sweep-multi-baseline:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_MULTI_BASELINE_CSV)
+	CLIENTS="$(CLIENT)" SSH_KEY=$(SSH_KEY) APP=$(APP) INPUT_GATEWAY_PORT=$(INPUT_GATEWAY_PORT) \
+		../sweep/sweep-multi.sh sequencer-multi1 . "$(abspath $(SWEEP_MULTI_BASELINE_CSV))" \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
 
 ## The same sweep, submitting straight to a node's ProposeService
 ## instead of through the input gateway — the control arm that prices
