@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="940" height="500" viewBox="0 0 940 500" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="The same split, at p99">
 <rect width="940" height="500" fill="#fcfcfb"/>
 <text x="84" y="30" font-size="16" font-weight="600" fill="#0b0b0b">The same split, at p99</text>
-<text x="84" y="50" font-size="12" fill="#52514e">Both arms: one fleet, one leader (pinned to the node the clients share an AZ with),</text>
-<text x="84" y="66" font-size="12" fill="#52514e">identical rig settings and the same 100 sender threads in total — only the number of</text>
-<text x="84" y="82" font-size="12" fill="#52514e">client boxes and their input gateways differs. Percentiles come from merging every</text>
-<text x="84" y="98" font-size="12" fill="#52514e">client's raw histogram, not from averaging theirs. Hollow marker = fell behind the rate.</text>
+<text x="84" y="50" font-size="12" fill="#52514e">One fleet, one leader (pinned to the node the clients share an AZ and placement group</text>
+<text x="84" y="66" font-size="12" fill="#52514e">with), identical rig settings and the same 100 sender threads in total throughout.</text>
+<text x="84" y="82" font-size="12" fill="#52514e">Percentiles come from merging every client's raw histogram, not from averaging theirs.</text>
+<text x="84" y="98" font-size="12" fill="#52514e">Hollow marker = the cluster fell behind the offered rate.</text>
 <line x1="84" y1="379.7" x2="896" y2="379.7" stroke="#e1e0d9"/>
 <text x="74" y="383.7" font-size="11" fill="#898781" text-anchor="end">1 ms</text>
 <line x1="84" y1="346.8" x2="896" y2="346.8" stroke="#e1e0d9"/>
@@ -71,9 +71,22 @@
 <circle cx="743.8" cy="294.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="794.5" cy="246.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="845.2" cy="157.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M134.8,347.7 L195.7,312.6 L256.5,306.6 L287.0,305.5 L347.9,304.5 L408.8,304.7 L490.0,304.0 L591.5,307.5 L693.0,304.1 L794.5,235.9" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="134.8" cy="347.7" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="195.7" cy="312.6" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="256.5" cy="306.6" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="287.0" cy="305.5" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="347.9" cy="304.5" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="408.8" cy="304.7" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="490.0" cy="304.0" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="591.5" cy="307.5" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="693.0" cy="304.1" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="794.5" cy="235.9" r="4.5" fill="#1baf7a" stroke="#fcfcfb" stroke-width="2"/>
 </g>
 <circle cx="89" cy="470" r="4.5" fill="#2a78d6"/>
-<text x="100" y="474" font-size="11" fill="#52514e">1 input gateway</text>
-<circle cx="211.5" cy="470" r="4.5" fill="#eb6834"/>
-<text x="222.5" y="474" font-size="11" fill="#52514e">5 input gateways</text>
+<text x="100" y="474" font-size="11" fill="#52514e">1 input gateway (8-vCPU client)</text>
+<circle cx="312.29999999999995" cy="470" r="4.5" fill="#eb6834"/>
+<text x="323.29999999999995" y="474" font-size="11" fill="#52514e">5 input gateways (8-vCPU clients)</text>
+<circle cx="548.1999999999999" cy="470" r="4.5" fill="#1baf7a"/>
+<text x="559.1999999999999" y="474" font-size="11" fill="#52514e">5 input gateways (4-vCPU clients)</text>
 </svg>

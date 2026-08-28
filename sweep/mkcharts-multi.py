@@ -14,8 +14,8 @@ OUT = sys.argv[1] if len(sys.argv) > 1 else SEQ
 
 SURF, INK, INK2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 BAND = "#f0efec"
-# First two of mkcharts.py's palette, which cleared its all-pairs check.
-COLS = ["#2a78d6", "#eb6834"]
+# First three of mkcharts.py's palette, which cleared its all-pairs check.
+COLS = ["#2a78d6", "#eb6834", "#1baf7a"]
 FONT = 'system-ui,-apple-system,"Segoe UI",sans-serif'
 
 
@@ -106,15 +106,17 @@ def chart(path, title, sub, series, xmax, xstep, yrange, yticks, fmt,
 
 us = lambda v: f"{v//1000} ms" if v >= 1000 else f"{v} µs"
 B, M = f"{SEQ}/seq-multi-baseline.csv", f"{SEQ}/seq-multi.csv"
-SUB = ["Both arms: one fleet, one leader (pinned to the node the clients share an AZ with),",
-       "identical rig settings and the same 100 sender threads in total — only the number of",
-       "client boxes and their input gateways differs. Percentiles come from merging every",
-       "client's raw histogram, not from averaging theirs. Hollow marker = fell behind the rate."]
+F = f"{SEQ}/seq-multi-4core.csv"
+SUB = ["One fleet, one leader (pinned to the node the clients share an AZ and placement group",
+       "with), identical rig settings and the same 100 sender threads in total throughout.",
+       "Percentiles come from merging every client's raw histogram, not from averaging theirs.",
+       "Hollow marker = the cluster fell behind the offered rate."]
 
 chart(f"{OUT}/multi-gateway-p50.svg",
-      "Five input gateways move the knee from ~137k to ~360k",
-      SUB, [("1 input gateway", load(B, "sequencer-multi1", "p50")),
-            ("5 input gateways", load(M, "sequencer-multi", "p50"))],
+      "Five gateways move the knee 2.6x - but halving the client boxes costs the sub-ms p50",
+      SUB, [("1 input gateway (8-vCPU client)", load(B, "sequencer-multi1", "p50")),
+            ("5 input gateways (8-vCPU clients)", load(M, "sequencer-multi", "p50")),
+            ("5 input gateways (4-vCPU clients)", load(F, "sequencer-multi-4c", "p50"))],
       xmax=400000, xstep=50000, yrange=(500.0, 60000.0),
       yticks=[600, 800, 1000, 2000, 5000, 20000], fmt=us,
       band_at=1000, band_label="1 ms",
@@ -122,8 +124,9 @@ chart(f"{OUT}/multi-gateway-p50.svg",
 
 chart(f"{OUT}/multi-gateway-p99.svg",
       "The same split, at p99",
-      SUB, [("1 input gateway", load(B, "sequencer-multi1", "p99")),
-            ("5 input gateways", load(M, "sequencer-multi", "p99"))],
+      SUB, [("1 input gateway (8-vCPU client)", load(B, "sequencer-multi1", "p99")),
+            ("5 input gateways (8-vCPU clients)", load(M, "sequencer-multi", "p99")),
+            ("5 input gateways (4-vCPU clients)", load(F, "sequencer-multi-4c", "p99"))],
       xmax=400000, xstep=50000, yrange=(600.0, 200000.0),
       yticks=[1000, 2000, 5000, 20000, 100000], fmt=us,
       markers=[(137000, "1-gateway knee", 16), (360000, "5-gateway knee", 32)])
