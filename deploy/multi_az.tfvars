@@ -15,12 +15,14 @@ node_azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
 # `aws ec2 modify-instance-attribute`: terraform plans this change as
 # destroy-and-recreate, which would both wipe the disks and briefly
 # need more vCPU than the quota allows.
-# Clients run at 4 vCPU while nodes stay at 8. The five-gateway result
-# (sequencer/multi-gateway-p50.svg) was measured with 8-vCPU clients and
-# 5x8 + 3x8 = 64 vCPU left no headroom at all; at 4 vCPU the same fleet
-# is 5x4 + 3x8 = 44, which is what frees budget for bigger nodes once
-# the quota request clears. Whether 4 cores still carries the load is
-# itself the thing being checked -- each client box runs BOTH a load
-# generator and an input gateway, so they compete for those cores.
-node_instance_type   = "c7a.2xlarge"
-client_instance_type = "c7a.xlarge"
+# 5x8 (clients) + 3x16 (nodes) = 88 vCPU, inside the 128 the account was
+# raised to on 2026-08-28. Clients are back at 8 vCPU because 4 did not
+# hold the result -- p50 at 100k went 747us to 1193us, with the box only
+# 47% busy, so it was thread contention between the colocated load
+# generator and input gateway rather than any shortage of capacity
+# (sequencer/seq-multi-4core.csv). Nodes go to 16 so that node size is
+# the ONLY difference from the five-gateway arm in seq-multi.csv.
+# AMD Genoa throughout: it measured lower latency than the Intel parts
+# tried here (sequencer/fleet-instance-types.svg).
+node_instance_type   = "c7a.4xlarge"
+client_instance_type = "c7a.2xlarge"

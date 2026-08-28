@@ -14,8 +14,8 @@ OUT = sys.argv[1] if len(sys.argv) > 1 else SEQ
 
 SURF, INK, INK2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 BAND = "#f0efec"
-# First three of mkcharts.py's palette, which cleared its all-pairs check.
-COLS = ["#2a78d6", "#eb6834", "#1baf7a"]
+# First four of mkcharts.py's palette, which cleared its all-pairs check.
+COLS = ["#2a78d6", "#eb6834", "#1baf7a", "#b5179e"]
 FONT = 'system-ui,-apple-system,"Segoe UI",sans-serif'
 
 
@@ -44,9 +44,9 @@ def load(path, product, col):
 
 def chart(path, title, sub, series, xmax, xstep, yrange, yticks, fmt,
           band_at=None, band_label=None, markers=()):
-    W, H, L, R = 940, 500, 84, 44
+    W, H, L, R = 940, 516, 84, 44
     T = 50 + len(sub) * 16 + 14
-    B = 96
+    B = 112
     PW, PH = W - L - R, H - T - B
     ylo, yhi = math.log10(yrange[0]), math.log10(yrange[1])
     xm = lambda v: L + PW * (v / xmax)
@@ -95,11 +95,14 @@ def chart(path, title, sub, series, xmax, xstep, yrange, yticks, fmt,
             o.append(f'<circle cx="{xm(k):.1f}" cy="{ym(val):.1f}" r="4.5" '
                      f'fill="{SURF if sat else col}" stroke="{col if sat else SURF}" stroke-width="2"/>')
     o.append('</g>')
-    lx, ly = L, H - 30
+    lx, ly = L, H - 46
     for (label, _), col in zip(series, COLS):
+        w = 28 + len(label) * 6.3
+        if lx + w > W - 10:
+            lx, ly = L, ly + 17
         o.append(f'<circle cx="{lx+5}" cy="{ly}" r="4.5" fill="{col}"/>')
         o.append(f'<text x="{lx+16}" y="{ly+4}" font-size="11" fill="{INK2}">{label}</text>')
-        lx += 28 + len(label) * 6.3
+        lx += w
     o.append('</svg>')
     open(path, "w").write("\n".join(o))
 
@@ -107,27 +110,30 @@ def chart(path, title, sub, series, xmax, xstep, yrange, yticks, fmt,
 us = lambda v: f"{v//1000} ms" if v >= 1000 else f"{v} µs"
 B, M = f"{SEQ}/seq-multi-baseline.csv", f"{SEQ}/seq-multi.csv"
 F = f"{SEQ}/seq-multi-4core.csv"
+G = f"{SEQ}/seq-multi-bignode.csv"
 SUB = ["One fleet, one leader (pinned to the node the clients share an AZ and placement group",
        "with), identical rig settings and the same 100 sender threads in total throughout.",
        "Percentiles come from merging every client's raw histogram, not from averaging theirs.",
        "Hollow marker = the cluster fell behind the offered rate."]
 
 chart(f"{OUT}/multi-gateway-p50.svg",
-      "Five gateways move the knee 2.6x - but halving the client boxes costs the sub-ms p50",
-      SUB, [("1 input gateway (8-vCPU client)", load(B, "sequencer-multi1", "p50")),
-            ("5 input gateways (8-vCPU clients)", load(M, "sequencer-multi", "p50")),
-            ("5 input gateways (4-vCPU clients)", load(F, "sequencer-multi-4c", "p50"))],
-      xmax=400000, xstep=50000, yrange=(500.0, 60000.0),
+      "Gateway count moves the knee; node size moves the tail",
+      SUB, [("1 gateway - 8-vCPU clients, 8-vCPU nodes", load(B, "sequencer-multi1", "p50")),
+            ("5 gateways - 8-vCPU clients, 8-vCPU nodes", load(M, "sequencer-multi", "p50")),
+            ("5 gateways - 4-vCPU clients, 8-vCPU nodes", load(F, "sequencer-multi-4c", "p50")),
+            ("5 gateways - 8-vCPU clients, 16-vCPU nodes", load(G, "sequencer-multi-16c", "p50"))],
+      xmax=470000, xstep=50000, yrange=(500.0, 60000.0),
       yticks=[600, 800, 1000, 2000, 5000, 20000], fmt=us,
       band_at=1000, band_label="1 ms",
       markers=[(137000, "1-gateway knee", 16), (360000, "5-gateway knee", 32)])
 
 chart(f"{OUT}/multi-gateway-p99.svg",
       "The same split, at p99",
-      SUB, [("1 input gateway (8-vCPU client)", load(B, "sequencer-multi1", "p99")),
-            ("5 input gateways (8-vCPU clients)", load(M, "sequencer-multi", "p99")),
-            ("5 input gateways (4-vCPU clients)", load(F, "sequencer-multi-4c", "p99"))],
-      xmax=400000, xstep=50000, yrange=(600.0, 200000.0),
+      SUB, [("1 gateway - 8-vCPU clients, 8-vCPU nodes", load(B, "sequencer-multi1", "p99")),
+            ("5 gateways - 8-vCPU clients, 8-vCPU nodes", load(M, "sequencer-multi", "p99")),
+            ("5 gateways - 4-vCPU clients, 8-vCPU nodes", load(F, "sequencer-multi-4c", "p99")),
+            ("5 gateways - 8-vCPU clients, 16-vCPU nodes", load(G, "sequencer-multi-16c", "p99"))],
+      xmax=470000, xstep=50000, yrange=(600.0, 200000.0),
       yticks=[1000, 2000, 5000, 20000, 100000], fmt=us,
       markers=[(137000, "1-gateway knee", 16), (360000, "5-gateway knee", 32)])
 
