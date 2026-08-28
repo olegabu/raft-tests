@@ -22,7 +22,7 @@ TOPOLOGY ?= multi_az
 # Relative to deploy/, since terraform -chdir=deploy resolves -var-file from there.
 TFVARS    = $(TOPOLOGY).tfvars
 
-.PHONY: deploy plan destroy env node-rtt
+.PHONY: deploy deploy-multi deploy-multi-unattended start-instances stop-instances plan destroy env node-rtt
 
 # How many load-generator/input-gateway boxes to provision. 1 is the
 # historical fleet. Passed on every apply, so whichever value you use
@@ -30,6 +30,8 @@ TFVARS    = $(TOPOLOGY).tfvars
 # `make deploy-multi` WILL destroy the extra clients, which is the
 # intended way to shrink back.
 CLIENT_COUNT ?= 1
+# aws-cli calls here are region-scoped; deploy/main.tf pins the same one.
+AWS_REGION ?= us-east-1
 
 ## Create/update the EC2 fleet for $(TOPOLOGY) (switch with make deploy TOPOLOGY=single_az)
 deploy:
@@ -49,6 +51,48 @@ MULTI_CLIENT_COUNT ?= 5
 deploy-multi:
 	$(MAKE) deploy CLIENT_COUNT=$(MULTI_CLIENT_COUNT)
 
+## Same fleet, applied without the interactive "yes". Not a bare
+## -auto-approve: it saves the plan, refuses it if anything would be
+## destroyed or replaced (deploy/assert-safe-plan.py), and only then
+## applies that exact saved plan. The prompt mostly guards against a
+## plan quietly becoming a teardown, and that is the case this checks --
+## it caught a provider-side AMI change that would have replaced the
+## whole fleet. For a deliberate teardown use `make destroy`.
+deploy-multi-unattended:
+	terraform -chdir=deploy init -input=false
+	terraform -chdir=deploy plan -input=false -var-file=$(TFVARS) \
+		-var client_count=$(MULTI_CLIENT_COUNT) -out=tfplan
+	terraform -chdir=deploy show -json tfplan | python3 deploy/assert-safe-plan.py
+	terraform -chdir=deploy apply -input=false tfplan
+	rm -f deploy/tfplan
+	$(MAKE) env
+
+## Start every stopped instance and block until all are running. A
+## terraform apply creates new instances running but leaves existing
+## stopped ones alone, so a fleet brought back from stopped needs this.
+start-instances:
+	@ids=$$(aws ec2 describe-instances --region $(AWS_REGION) \
+		--filters 'Name=instance-state-name,Values=stopped' \
+		--query 'Reservations[].Instances[].InstanceId' --output text); \
+	if [ -n "$$ids" ]; then echo "starting: $$ids"; \
+		aws ec2 start-instances --region $(AWS_REGION) --instance-ids $$ids >/dev/null; \
+	else echo "nothing stopped"; fi
+	@echo "waiting for all instances to reach running..."
+	@until [ -z "$$(aws ec2 describe-instances --region $(AWS_REGION) \
+		--filters 'Name=instance-state-name,Values=pending,stopping,stopped' \
+		--query 'Reservations[].Instances[].InstanceId' --output text)" ]; do sleep 10; done
+	@aws ec2 describe-instances --region $(AWS_REGION) \
+		--query 'Reservations[].Instances[].{N:Tags[?Key==`Name`]|[0].Value,T:InstanceType,S:State.Name}' \
+		--output table
+
+## Stop every running instance -- compute billing ceases, disks survive.
+stop-instances:
+	@ids=$$(aws ec2 describe-instances --region $(AWS_REGION) \
+		--filters 'Name=instance-state-name,Values=running' \
+		--query 'Reservations[].Instances[].InstanceId' --output text); \
+	if [ -n "$$ids" ]; then aws ec2 stop-instances --region $(AWS_REGION) --instance-ids $$ids >/dev/null; \
+		echo "stopping: $$ids"; else echo "nothing running"; fi
+
 ## Read-only: show what switching to $(TOPOLOGY) would change, without applying
 plan:
 	terraform -chdir=deploy init
@@ -59,6 +103,11 @@ destroy:
 
 ## Write instance IPs from terraform state into .env
 env:
+	@# Refresh first: terraform stores whatever the public IPs were at the
+	@# last apply, and a stopped instance has none. Bringing a fleet back
+	@# from stopped and running `make env` straight after therefore wrote
+	@# an .env full of empty hostnames.
+	terraform -chdir=deploy refresh -var-file=$(TFVARS) -var client_count=$(CLIENT_COUNT) >/dev/null
 	terraform -chdir=deploy output -raw env_file > .env
 	@cat .env
 
