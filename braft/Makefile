@@ -143,6 +143,16 @@ client:
 ## split-load sweep (../sweep/sweep-multi.sh) runs one load generator
 ## per box against the same leader; `push` only ever provisioned the
 ## one client this repo's original topology had.
+## NOTE: braft's servers and sequencer's nodes both listen on $(PORT)
+## (8300), and braft answers /raft_stat the same way. Leaving one
+## product's servers running therefore does not produce an obvious
+## conflict -- the other product's node fails to bind and exits, while
+## the first one keeps answering the health check that was meant to
+## confirm the second had started. Diagnosed the slow way: a sequencer
+## node had created its journal files and was gone, and `make leader`
+## cheerfully reported LEADER the whole time, because it was braft's.
+## Run `make -C braft stop` before starting sequencer on the same fleet,
+## and vice versa.
 push-multi: push
 	for h in $(CLIENTS); do \
 		ssh $(SSH_OPTS) $(SSH_USER)@$$h "mkdir -p $(CLIENT_DIR)/build" && \
