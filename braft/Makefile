@@ -83,7 +83,7 @@ PEERS      = $(NODE1_PRIV):$(PORT):0,$(NODE2_PRIV):$(PORT):0,$(NODE3_PRIV):$(POR
 NODE_DIR   = /data/atomic
 CLIENT_DIR = atomic
 
-.PHONY: build push start stop client logs transfer-leader
+.PHONY: build push push-multi start stop client sweep-multi sweep-multi-baseline logs transfer-leader
 
 # Built separately from the braft repo (BUILD_TOOLS is off by default there):
 #   cmake --preset default -DBUILD_TOOLS=ON ~/workspace/braft
@@ -138,6 +138,58 @@ client:
 			--drain_timeout $(DRAIN_TIMEOUT) $(HDR_FLAG) \
 			--event_dispatcher_num $(EVENT_DISPATCHERS) \
 			--connection_type '$(CONNECTION_TYPE)' --channels $(CHANNELS)"
+
+## Push the client harness to EVERY client box, not just CLIENT. The
+## split-load sweep (../sweep/sweep-multi.sh) runs one load generator
+## per box against the same leader; `push` only ever provisioned the
+## one client this repo's original topology had.
+push-multi: push
+	for h in $(CLIENTS); do \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h "mkdir -p $(CLIENT_DIR)/build" && \
+		scp $(SSH_OPTS) build/atomic_client $(SSH_USER)@$$h:$(CLIENT_DIR)/build/ && \
+		scp $(SSH_OPTS) run_client.sh shflags $(SSH_USER)@$$h:$(CLIENT_DIR)/ ; \
+	done
+
+## The split-load sweep, for the same reason sequencer has one: braft's
+## published knee was measured with a SINGLE client box, and sequencer's
+## own "knee" turned out to be that client rather than the cluster --
+## five clients moved it 2.6x. Until braft is measured the same way, any
+## comparison between the two is against a handicapped field.
+##
+## Percentiles come from merging every client's raw histogram
+## (--hdr_raw_out, ../sweep/merge-hdr.py), not from averaging their
+## reported p50s, which is only valid if every client saw the same
+## distribution -- the thing being measured.
+SWEEP_MULTI_CSV ?= braft-multi.csv
+SWEEP_MULTI_BASELINE_CSV ?= braft-multi-baseline.csv
+SWEEP_RATES   ?= 40000 70000 100000 130000 160000 200000 250000 300000 350000
+SWEEP_WARMUP  ?= 10
+SWEEP_MEASURE ?= 25
+# The braft client's own invocation, as sweep-multi.sh's CLIENT_CMD
+# template; {RATE}/{THREADS}/{RAW} are substituted per run.
+MULTI_CLIENT_CMD = ./run_client.sh --peers '$(PEERS)' --mode open --pace $(PACE) \
+	--thread_num {THREADS} --rate {RATE} --burst $(BURST) \
+	--bthread_concurrency $(CLIENT_CONCURRENCY) \
+	--warmup $(SWEEP_WARMUP) --measure $(SWEEP_MEASURE) --drain_timeout $(DRAIN_TIMEOUT) \
+	--event_dispatcher_num $(EVENT_DISPATCHERS) \
+	--connection_type '$(CONNECTION_TYPE)' --channels $(CHANNELS) \
+	--hdr_raw_out {RAW}
+
+sweep-multi:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_MULTI_CSV)
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
+		CLIENT_CMD="$(MULTI_CLIENT_CMD)" \
+		../sweep/sweep-multi.sh braft-multi . "$(abspath $(SWEEP_MULTI_CSV))" \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
+
+## The N=1 control arm, through the identical script and rig settings so
+## the only difference is how many boxes carry the load.
+sweep-multi-baseline:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_MULTI_BASELINE_CSV)
+	CLIENTS="$(CLIENT)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
+		CLIENT_CMD="$(MULTI_CLIENT_CMD)" \
+		../sweep/sweep-multi.sh braft-multi1 . "$(abspath $(SWEEP_MULTI_BASELINE_CSV))" \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
 
 logs:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/runtime/0/std.log"

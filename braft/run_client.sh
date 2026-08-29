@@ -43,6 +43,7 @@ DEFINE_integer measure 30 'Seconds recorded'
 DEFINE_integer drain_timeout 10 'Seconds to wait for in-flight replies after the window'
 DEFINE_string pace 'spin' 'open mode wait strategy between sends: spin or park'
 DEFINE_string hdr_out '' 'Write a percentile report here'
+DEFINE_string hdr_raw_out '' 'Write raw value,count buckets here, for merging across clients'
 
 FLAGS "$@" || exit 1
 
@@ -83,4 +84,5 @@ ${VALGRIND} ./build/atomic_client \
         --connection_type="${FLAGS_connection_type}" \
         --channels=${FLAGS_channels} \
         --hdr_out="${FLAGS_hdr_out}" \
+        --hdr_raw_out="${FLAGS_hdr_raw_out}" \
 

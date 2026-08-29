@@ -79,6 +79,16 @@ DEFINE_string(connection_type, "", "brpc connection type: single, pooled or shor
 // RPC, so it does not exhaust ephemeral ports at six-figure rates.
 DEFINE_int32(channels, 1, "Open mode: distinct connections to the leader, round-robin");
 DEFINE_string(hdr_out, "", "Write a percentile report here");
+DEFINE_string(hdr_raw_out, "",
+              "Write the raw recorded buckets here as value,count -- the form several clients' "
+              "histograms can be MERGED from (../sweep/merge-hdr.py). --hdr_out writes a "
+              "formatted percentile report, which carries percentiles but not the counts they "
+              "came from, so two of them cannot be combined. Splitting offered load across "
+              "several client boxes needs this, because percentiles do not average: the mean of "
+              "N clients' p50s is the p50 of their union only if every client saw the same "
+              "distribution, which is the thing a split-load test sets out to measure. Mirrors "
+              "sequencer's own load generator flag of the same name, so ../sweep/sweep-multi.sh "
+              "drives both without knowing which product it is running.");
 
 // One minute in microseconds: the histogram ceiling. brpc reports latency in
 // microseconds, so that is the unit used throughout.
@@ -401,6 +411,24 @@ static void print_summary() {
         const double ratio = implied / (double)FLAGS_thread_num;
         printf("little's law ratio   %.2f%s\n", ratio,
                (ratio < 0.9 || ratio > 1.1) ? "   WARNING: >10% off, suspect a rig bug" : "");
+    }
+
+    if (!FLAGS_hdr_raw_out.empty()) {
+        FILE* f = fopen(FLAGS_hdr_raw_out.c_str(), "w");
+        if (f != NULL) {
+            fprintf(f, "value,count\n");
+            struct hdr_iter iter;
+            hdr_iter_recorded_init(&iter, g_measured);
+            while (hdr_iter_next(&iter)) {
+                if (iter.count > 0) {
+                    fprintf(f, "%lld,%lld\n", (long long)iter.value, (long long)iter.count);
+                }
+            }
+            fclose(f);
+            printf("hdr raw              %s\n", FLAGS_hdr_raw_out.c_str());
+        } else {
+            fprintf(stderr, "failed to write %s\n", FLAGS_hdr_raw_out.c_str());
+        }
     }
 
     if (!FLAGS_hdr_out.empty()) {

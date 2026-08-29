@@ -21,6 +21,13 @@
 #
 # Needs CLIENTS (space-separated public IPs) in the environment -- `make
 # env` writes it from the terraform outputs.
+#
+# CLIENT_CMD is the per-client command, as a template with {RATE},
+# {THREADS} and {RAW} substituted per run. It defaults to sequencer's
+# load generator; braft/openraft/aeron pass their own, which is what
+# lets one script drive a split-load sweep for any of them. The product
+# only has to write raw histogram buckets to {RAW} -- see merge-hdr.py
+# for why merging those beats averaging reported percentiles.
 set -u
 PROD=$1; DIR=$2; CSV=$3; WU=$4; ME=$5; EXTRA=$6; shift 6
 
@@ -38,6 +45,9 @@ BURST=${BURST:-1}
 # the rig offers load the same way at N=1 and N=5 and only the gateway count
 # differs. Per-client share is this over N.
 THREADS_TOTAL=${THREADS_TOTAL:-100}
+# WU and ME are already set from the positional arguments above, so the
+# default template interpolates them here, once.
+CLIENT_CMD=${CLIENT_CMD:-"./${APP}_load_generator --input_gateway_addr=127.0.0.1:${INPUT_GATEWAY_PORT} --mode open --pace ${PACE} --thread_num {THREADS} --rate {RATE} --burst ${BURST} --warmup ${WU} --measure ${ME} --drain_timeout ${DRAIN_TIMEOUT} --hdr_raw_out {RAW} --logtostderr"}
 
 read -r -a HOSTS <<< "$CLIENTS"
 N=${#HOSTS[@]}
@@ -59,14 +69,11 @@ for R in "$@"; do
     L=/tmp/multi_${PROD}_${R}_$i.log; LOGS+=("$L"); RAWS+=("/tmp/multi_${PROD}_${R}_$i.csv")
     # No -t: a tty per background ssh interleaves the five outputs into one
     # unparseable stream, and CRLF-mangles every field sweep.sh has to strip.
+    CMD=${CLIENT_CMD//\{RATE\}/$MYRATE}
+    CMD=${CMD//\{THREADS\}/$THREADS}
+    CMD=${CMD//\{RAW\}//tmp/raw.csv}
     timeout $((WU + ME + DRAIN_TIMEOUT + 60)) \
-      ssh $SSH_OPTS "$SSH_USER@$H" \
-        "cd $CLIENT_DIR && ./${APP}_load_generator \
-           --input_gateway_addr=127.0.0.1:$INPUT_GATEWAY_PORT \
-           --mode open --pace $PACE --thread_num $THREADS \
-           --rate $MYRATE --burst $BURST \
-           --warmup $WU --measure $ME --drain_timeout $DRAIN_TIMEOUT \
-           --hdr_raw_out /tmp/raw.csv --logtostderr" > "$L" 2>&1 &
+      ssh $SSH_OPTS "$SSH_USER@$H" "cd $CLIENT_DIR && $CMD" > "$L" 2>&1 &
     PIDS+=($!)
   done
   # Wait for every client before touching any result: a client still running
