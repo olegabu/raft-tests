@@ -175,10 +175,11 @@ push:
 		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_node $(SSH_USER)@$$h:$(NODE_DIR)/ ; \
 	done
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/gateway/relay/sequencer_relay $(SSH_USER)@$(NODE1):$(NODE_DIR)/
+	# One binary now, serving whichever transports its --*_port flags
+	# enable. The three single-transport binaries it replaced were
+	# deleted upstream; this used to copy all four, three of which no
+	# sweep here ever ran.
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_output_gateway \
-		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_brpc_output_gateway \
-		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_grpc_output_gateway \
-		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_websocket_output_gateway \
 		$(SSH_USER)@$(NODE1):$(NODE_DIR)/
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "mkdir -p $(CLIENT_DIR)"
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_input_gateway \
