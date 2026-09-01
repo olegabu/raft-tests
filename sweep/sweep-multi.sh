@@ -69,7 +69,15 @@ for R in "$@"; do
     L=/tmp/multi_${PROD}_${R}_$i.log; LOGS+=("$L"); RAWS+=("/tmp/multi_${PROD}_${R}_$i.csv")
     # No -t: a tty per background ssh interleaves the five outputs into one
     # unparseable stream, and CRLF-mangles every field sweep.sh has to strip.
-    CMD=${CLIENT_CMD//\{RATE\}/$MYRATE}
+    # {CLIENT} is this client's index in CLIENTS. It exists because a
+    # per-client identity built with $(hostname) inside CLIENT_CMD gets
+    # evaluated by the LOCAL shell when make assigns the variable, so
+    # every client ended up with the same name -- and a FIX gateway
+    # correctly refuses two live sessions claiming one identity, so four
+    # of five clients were silently rejected and the sweep reported a
+    # fifth of the offered rate as if it were the system's limit.
+    CMD=${CLIENT_CMD//\{CLIENT\}/$i}
+    CMD=${CMD//\{RATE\}/$MYRATE}
     CMD=${CMD//\{THREADS\}/$THREADS}
     CMD=${CMD//\{RAW\}//tmp/raw.csv}
     timeout $((WU + ME + DRAIN_TIMEOUT + 60)) \

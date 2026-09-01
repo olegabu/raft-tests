@@ -1,0 +1,4 @@
+product,rate,achieved,p50,p90,p99,p999,max,dropped,lag
+sequencer-fix,50000,0,,,,,,1395005,0
+sequencer-fix,100000,99755,1057,1441,2648,65728,75712,0,1
+sequencer-fix,150000,149635,1177,1652,49920,86912,96192,0,1

@@ -84,6 +84,59 @@ OUTPUT_BRPC_PORT      ?= 8600
 OUTPUT_GRPC_PORT      ?= 8601
 OUTPUT_WEBSOCKET_PORT ?= 8602
 OUTPUT_GATEWAY_BIN    := $(APP)_output_gateway
+
+# The FIX session gateway (sequencer specification.md 8.12). Unlike the
+# input gateway it runs on NODE1, not on a client box: it is a SESSION
+# gateway, so its output half tails the journal and must be colocated
+# with a replica, exactly as the output gateway is. Clients reach it
+# over the network.
+#
+# FIX_SESSIONS is how many concurrent FIX sessions each client opens.
+# Throughput scales with sessions because FixInputTransport runs a
+# reader thread per connection -- measured locally, one session carried
+# ~20k/s and three carried ~45k/s through one gateway.
+FIX_GATEWAY_BIN  := $(APP)_fix_gateway
+
+## Environment forwarded into the remote gateway process. `make` does not
+## carry its own environment across ssh, so FIX_STAGE_TIMERS=1 on the
+## command line reached the local make and nothing else -- a whole run was
+## measured with the timers silently off. Pass it explicitly:
+##   make start-fix FIX_STAGE_TIMERS=1
+FIX_ENV := $(if $(FIX_STAGE_TIMERS),FIX_STAGE_TIMERS=$(FIX_STAGE_TIMERS),)
+
+## Answer from the propose receipt instead of the journal (see the
+## gateway's --inline_designated_outputs). Default false = §8.11.
+FIX_INLINE ?= false
+FIX_PORT         ?= 8700
+FIX_SESSIONS     ?= 3
+
+# How many FIX gateway processes to run on NODE1, on consecutive ports
+# from FIX_PORT. Clients are spread across them round-robin.
+#
+# More than one exists because a session gateway has a SINGLE ring
+# reader thread delivering to every session it serves -- that is
+# deliberate, since specification.md 8.11 requires a session's outputs
+# in journal order and independent readers could interleave them. It
+# also makes that thread a serialization point: measured ~11us per
+# entry in deliver(), so one reader saturates a core somewhere around
+# 100k messages/sec. Splitting sessions across processes gives each its
+# own reader without weakening the ordering guarantee, because ordering
+# is per session and a session lives on exactly one gateway.
+#
+# The cost is that each gateway independently tails the journal and
+# runs the codec, so NODE1 does that work once per gateway.
+FIX_GATEWAYS     ?= 1
+
+# Which nodes run FIX gateways. NODE1 only by default.
+#
+# A gateway's OUTPUT half may attach to any replica (specification.md
+# 3.3), so followers can host one and tail their own journal. Its INPUT
+# half cannot: proposals go to the LEADER, so a gateway on NODE2 or
+# NODE3 pays a cross-AZ hop per proposal -- measured ~500us RTT on this
+# fleet -- and reads a journal that lags the leader's by replication
+# time. Spreading buys ring-reader capacity and costs latency, which is
+# a real trade rather than a free win.
+FIX_NODES        ?= $(NODE1_PRIV)
 ifeq ($(OUTPUT_GATEWAY_FLAVOR),brpc)
 OUTPUT_GATEWAY_PORT := $(OUTPUT_BRPC_PORT)
 else ifeq ($(OUTPUT_GATEWAY_FLAVOR),grpc)
@@ -153,7 +206,7 @@ PEERS      = $(NODE1_PRIV):$(PORT):0,$(NODE2_PRIV):$(PORT):0,$(NODE3_PRIV):$(POR
 NODE_DIR   = /data/$(APP)
 CLIENT_DIR = $(APP)
 
-.PHONY: build push push-multi start start-multi stop stop-multi clean-data client client-relay client-output transfer-leader leader logs logs-relay logs-output
+.PHONY: build push push-multi start start-multi start-fix sweep-fix stop stop-fix stop-multi clean-data client client-relay client-output client-fix logs-fix transfer-leader leader logs logs-relay logs-output
 
 ## Build sequencer's Release preset (this is a benchmarking repo — see
 ## sequencer's own README's debug-vs-release note); requires a sibling
@@ -179,8 +232,16 @@ push:
 	# enable. The three single-transport binaries it replaced were
 	# deleted upstream; this used to copy all four, three of which no
 	# sweep here ever ran.
-	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_output_gateway \
+	-scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_output_gateway \
 		$(SSH_USER)@$(NODE1):$(NODE_DIR)/
+	# The FIX gateway goes to EVERY node, not just NODE1: its output half
+	# may attach to any replica (specification.md 3.3), so a deployment
+	# can spread session gateways across the group. Only NODE1 got it at
+	# first, and starting one elsewhere failed with a missing binary.
+	for h in $(NODE1) $(NODE2) $(NODE3); do \
+		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_fix_gateway \
+			$(SSH_USER)@$$h:$(NODE_DIR)/ ; \
+	done
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "mkdir -p $(CLIENT_DIR)"
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_input_gateway \
 		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_load_generator \
@@ -259,11 +320,136 @@ ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 			> $(NODE_DIR)/output_gateway.log 2>&1 < /dev/null & echo \$$! > $(APP)_output_gateway.pid"
 endif
 
+## Start the FIX session gateway on NODE1, beside the node whose
+## journal it tails. Separate from `start` because a FIX sweep is its
+## own experiment -- it replaces the input gateway AND the output
+## gateway with one binary, so running it alongside them would only
+## confuse which path a measurement came from.
+## Starts FIX_GATEWAYS gateways on each host in FIX_NODES_PUBLIC.
+##
+## RUN `clean-data` FIRST, always. This wipes each gateway's resume
+## position, so a gateway tails the journal FROM THE BEGINNING -- which
+## is right for a fresh experiment and catastrophic against a journal
+## that has history. Measured against a 3.9GB journal left by earlier
+## sweeps, the tail loop replayed 1.3 MILLION records/sec into the ring,
+## every read returned Overrun, the reader's cursor reset continuously,
+## and no live traffic was delivered at all. It looked exactly like the
+## gateway collapsing under load, and it is what made the first rate of
+## several sweeps fail while the rest passed.
+start-fix:
+	@for h in $(FIX_NODES_PUBLIC); do \
+		$(MAKE) --no-print-directory start-fix-on FIX_HOST=$$h; \
+	done
+	@echo "$(FIX_GATEWAYS) gateway(s) on each of: $(FIX_NODES_PUBLIC)"
+
+start-fix-on:
+	ssh $(SSH_OPTS) $(SSH_USER)@$(FIX_HOST) \
+		"cd $(NODE_DIR) && for i in \$$(seq 0 \$$(( $(FIX_GATEWAYS) - 1 ))); do \
+		   p=\$$(( $(FIX_PORT) + \$$i )); \
+		   rm -rf fix_resume_\$$i fix_seq_\$$i; \
+		   nohup env $(FIX_ENV) ./$(FIX_GATEWAY_BIN) --node_peers=$(NODE1_PRIV):$(PORT) \
+			--inline_designated_outputs=$(FIX_INLINE) \
+			--listen_port=\$$p --data_dir=$(NODE_DIR)/data \
+			--resume_file=$(NODE_DIR)/fix_resume_\$$i \
+			--sequence_store_dir=$(NODE_DIR)/fix_seq_\$$i \
+			--logtostderr --logbufsecs=0 \
+			> $(NODE_DIR)/fix_gateway_\$$i.log 2>&1 < /dev/null & \
+		   echo \$$! > $(APP)_fix_gateway_\$$i.pid; \
+		 done"
+	@sleep 3
+
+## Kills by matching the running command line, not only by pid file: a
+## stale or missing pid file left the gateway holding its binary and the
+## next `push` failed with "Text file busy", which is easy to miss when
+## push output is suppressed.
+stop-fix:
+	@for h in $(FIX_NODES_PUBLIC); do \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h \
+		 "ps -eo pid,args | grep '$(FIX_GATEWAY_BIN) --node_peers' | grep -v grep \
+		  | awk '{print \$$1}' | while read p; do kill \$$p 2>/dev/null; done" 2>/dev/null; \
+	done
+	@sleep 1
+
+stop-fix-node1:
+	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) \
+		"ps -eo pid,args | grep '$(FIX_GATEWAY_BIN) --node_peers' | grep -v grep \
+		 | awk '{print \$$1}' | while read p; do kill \$$p 2>/dev/null; done; \
+		 cd $(NODE_DIR) && rm -f $(APP)_fix_gateway_*.pid; sleep 1; :"
+
+logs-fix:
+	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) "tail -n 100 -f $(NODE_DIR)/fix_gateway.log"
+
+## One client box driving the FIX gateway. Each client opens
+## FIX_SESSIONS sessions with DISTINCT CompIDs -- distinct because a FIX
+## session identity is the CompID pair, and two live connections
+## claiming one identity are correctly refused by the gateway.
+client-fix:
+	ssh -t $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
+		"cd $(CLIENT_DIR) && ./$(APP)_load_generator \
+			--fix_gateway_addr=$(NODE1_PRIV):$(FIX_PORT) \
+			--fix_sender_comp_id=FIXCLI \
+			--mode open --pace $(PACE) --rate $(RATE) --burst $(BURST) \
+			--warmup $(WARMUP) --measure $(MEASURE) --drain_timeout $(DRAIN_TIMEOUT) \
+			--logtostderr"
+
+## The FIX sweep, multi-client. One gateway on NODE1; every client box
+## drives it with its own load generator, the offered rate split N ways,
+## and latencies merged from every client's raw histogram rather than
+## averaged (sweep/merge-hdr.py explains why averaging percentiles is
+## wrong).
+##
+## Every client opens a session on EVERY gateway and spreads its
+## requests across them, so each gateway carries an identical share.
+## One session per client would split five clients over two gateways
+## 3/2, and the merged latency would then blend a gateway at 60% of the
+## load with one at 40% -- neither gateway's real number.
+##
+## Each client gets a distinct CompID and a distinct nonce base, and
+## both matter. Distinct CompIDs because a FIX session identity is the
+## CompID pair and the gateway refuses two live connections claiming
+## one. Distinct nonce bases because every client subscribes to the SAME
+## broadcast topic and therefore sees every other client's replies --
+## without a per-client payload value they complete each other's
+## requests, which reads as impossibly low latency rather than as an
+## error. That produced a measured p50 of 75us against a fleet whose
+## leader-to-follower RTT alone is 500us.
+# Every gateway endpoint, host:port, in a stable order. A client picks
+# one by its own index, so clients spread round-robin across gateways
+# AND across nodes.
+FIX_NODES_PUBLIC ?= $(NODE1)
+COMMA := ,
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
+FIX_ENDPOINTS = $(foreach h,$(FIX_NODES),$(foreach i,$(shell seq 0 $$(( $(FIX_GATEWAYS) - 1 ))),$(h):$(shell echo $$(( $(FIX_PORT) + $(i) )))))
+FIX_ENDPOINT_COUNT = $(words $(FIX_ENDPOINTS))
+
+SWEEP_FIX_CSV   ?= fix.csv
+SWEEP_FIX_RATES ?= 10000 25000 50000 75000 100000 150000
+FIX_CLIENT_CMD = ./$(APP)_load_generator \
+	--fix_gateway_addr=$(subst $(SPACE),$(COMMA),$(FIX_ENDPOINTS)) \
+	--fix_sender_comp_id=FIX{CLIENT} \
+	--fix_client_id={CLIENT} \
+	--mode open --pace $(PACE) --rate {RATE} --burst $(BURST) \
+	--warmup $(SWEEP_WARMUP) --measure $(SWEEP_MEASURE) \
+	--drain_timeout $(DRAIN_TIMEOUT) --hdr_raw_out {RAW} --logtostderr
+
+sweep-fix:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_FIX_CSV)
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
+		CLIENT_CMD="$(FIX_CLIENT_CMD)" \
+		../sweep/sweep-multi.sh sequencer-fix . "$(abspath $(SWEEP_FIX_CSV))" \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_FIX_RATES)
+
 ## Push the client-side binaries to EVERY client box, not just
 ## CLIENT. `push` targets the single-client topology this repo was
 ## built around; the multi-gateway experiment needs the same two
 ## binaries on all of $(CLIENTS).
-push-multi: push
+## Deliberately NOT dependent on `push`: that copies NODE-side binaries,
+## which fail with "Text file busy" whenever the cluster is running, and
+## a failed prerequisite meant the client binaries were silently never
+## copied. Client and node pushes are independent; keeping them so means
+## updating a load generator does not require stopping the cluster.
+push-multi:
 	for h in $(CLIENTS); do \
 		ssh $(SSH_OPTS) $(SSH_USER)@$$h "mkdir -p $(CLIENT_DIR)" && \
 		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_input_gateway \
