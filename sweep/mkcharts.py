@@ -237,19 +237,34 @@ CFG={
  # 3.5x above it. Same axes for all three on purpose: the whole point
  # of charting them separately is that they are now hard to tell
  # apart, and shared axes are what makes that visible.
- "sequencer-output-brpc": (140000,25000,(500,100000),
+ "sequencer-output-brpc": (170000,25000,(500,100000),
                      [500,1000,2000,5000,10000,50000,100000], 120000,
-                     [(122000,"knee",16)],
+                     [(145000,"rig limit",16)],
                      "sequencer-output-brpc — brpc Streaming RPC, sub-1ms to 100k",
                      "Per-subscriber ring readers; p50 tracks the relay's own curve to the same 120k ceiling."),
- "sequencer-output-grpc": (140000,25000,(500,100000),
+ "sequencer-output-grpc": (170000,25000,(500,100000),
                      [500,1000,2000,5000,10000,50000,100000], 120000,
-                     [(122000,"knee",16)],
+                     [(145000,"rig limit",16)],
                      "sequencer-output-grpc — real gRPC streaming, sub-1ms to 100k",
                      "The synchronous gRPC API's thread-per-Subscribe is the per-subscriber reader here."),
- "sequencer-output-websocket": (140000,25000,(500,100000),
+ # FIX carries no knee marker because the sweep never found one: it
+ # absorbed every rate to 250k (248,959 of 250,000, p50 1949us) with the
+ # rig's own schedule lag still at 1us. Drawing a dashed "knee" here
+ # would invent an inflection the data does not contain.
+ #
+ # Its comfort zone ends far earlier than the output flavors' despite
+ # scaling further, and that is the honest shape of the trade: every
+ # output reaches a FIX client by the journal (specification.md 8.11),
+ # so the median carries a commit-then-read cycle the output gateways'
+ # subscribers do not pay.
+ "sequencer-fix": (260000,50000,(500,200000),
+                     [500,1000,2000,5000,10000,50000,200000], 55000,
+                     [],
+                     "sequencer-fix - FIX 4.4 order entry, no knee to 250k",
+                     "Two gateways, five client boxes, journal delivery. Absorbs 250k; p50 rises 750us to 1949us across the range."),
+ "sequencer-output-websocket": (170000,25000,(500,100000),
                      [500,1000,2000,5000,10000,50000,100000], 120000,
-                     [(122000,"knee",16)],
+                     [(145000,"rig limit",16)],
                      "sequencer-output-websocket — Boost.Beast WebSocket, sub-1ms to 100k",
                      "Each connection's stream is owned outright by its writer thread, not posted to a shared io thread."),
 }
@@ -308,10 +323,23 @@ RT = [("sequencer",                   "synchronous ack", C1),
       ("sequencer-relay",             "relay (gRPC)",    C2),
       ("sequencer-output-brpc",       "output: brpc",    C3),
       ("sequencer-output-grpc",       "output: gRPC",    C4),
-      ("sequencer-output-websocket",  "output: WebSocket", C5)]
+      ("sequencer-output-websocket",  "output: WebSocket", C5),
+      # C1, not a new hue: C3 is already output-brpc, and two series
+      # sharing a colour in one overlay is a colour-identity error, not
+      # a cosmetic one. The palette above has five slots checked
+      # all-pairs across three CVD models; a chart carrying all seven
+      # round trips at once would need a validated sixth, which is a
+      # deliberate exercise (run the palette validator) rather than a
+      # guess. C1 is free whenever the ack path is not in the same CSV,
+      # which is the case for the gateway-comparison sweep.
+      ("sequencer-fix",               "FIX 4.4",         C1)]
 rt_present = [(n,lab,c) for n,lab,c in RT if n in D]
 if len(rt_present) >= 2:
-    COLS,ROWS = 3,2
+    # Rows follow from how many round trips the CSVs actually carry.
+    # This was 3x2 for the six the repo had; a seventh (FIX) would have
+    # drawn off the bottom of the canvas.
+    COLS = 3
+    ROWS = max(1, -(-len(rt_present) // COLS))
     PANW,PANH = 268,196
     GX,GY = 26,58
     ML,MT = 62,124  # MT leaves room for a four-line subtitle above the first panel row
@@ -320,7 +348,13 @@ if len(rt_present) >= 2:
     # x-axis caption; with 5 panels in a 3x2 grid the caption would
     # otherwise land inside panel 5 rather than under the grid.
     H = MT + ROWS*PANH + (ROWS-1)*GY + 86
-    XMAX,XSTEP = 130000,50000
+    # Follows the data. Hardcoding 130k cut every curve off at exactly
+    # the rate the comparison exists to show: with FIX absorbing to 250k
+    # while the output flavors collapse at 145k, a fixed 130k axis hid
+    # the entire difference between them.
+    _maxrate = max((q["rate"] for _n,_l,_c in rt_present for q in D[_n]), default=130000)
+    XMAX = int(math.ceil(_maxrate / 25000.0) * 25000)
+    XSTEP = 50000 if XMAX > 150000 else 25000
     YR = (500.0, 200000.0)
     ylo,yhi = math.log10(YR[0]), math.log10(YR[1])
     _n = {2:"two",3:"three",4:"four",5:"five",6:"six"}.get(len(rt_present), str(len(rt_present)))
@@ -328,7 +362,9 @@ if len(rt_present) >= 2:
       ["Every hop this repo measures, same fleet and same sweep. Identical axes across panels; log latency scale.",
        "Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.",
        "Past the knee, latency runs to whole seconds; those points clip at the panel top.",
-       "The direct-to-node arm was swept further than these shared axes show \u2014 see its own chart."])
+       # Only true when that arm is actually in the CSVs being charted.
+       *(["The direct-to-node arm was swept further than these shared axes show \u2014 see its own chart."]
+         if "sequencer-direct" in D else [])])
     # Each panel clips its own series: past the knee p50 reaches
     # ~1-2 seconds, and stretching the axis to contain that would
     # squeeze the 500us-2ms range this chart exists to show into a
@@ -383,18 +419,30 @@ if len(rt_present) >= 2:
     # ---------- the same five, p50 only, overlaid ----------
     W,H,L,R,T,B = 900,470,78,40,96,74
     PW,PH = W-L-R,H-T-B
-    XMAX = 130000
+    # Same reason as the panels above: this axis was pinned at 130k, so
+    # every curve stopped exactly where the comparison gets interesting.
+    XMAX = int(math.ceil(_maxrate / 25000.0) * 25000)
     ylo,yhi = math.log10(600.0), math.log10(200000.0)
     xm = lambda v: L+PW*(v/XMAX)
     ym = lambda v: T+PH*(1-(math.log10(v)-ylo)/(yhi-ylo))
-    o = head(W,H,"sequencer: every gateway round trip is sub-millisecond at 100k — the ack path is not",
+    # Built from the data, not typed in. This line used to be a literal
+    # carried from an older sweep, so it kept asserting relay/ack
+    # numbers even when neither product was in the CSVs being charted.
+    _at100k = []
+    for _n,_lab,_c in rt_present:
+        _pt = next((q for q in D[_n] if q["rate"] == 100000 and q["p50"] > 0), None)
+        if _pt:
+            _at100k.append(f"{_lab} {_pt['p50']:,} µs")
+    _sub = ("At 100k: " + "; ".join(_at100k) + "." if _at100k
+            else "No 100k point in this dataset.")
+    o = head(W,H,"sequencer: gateway round trips, p50 vs offered rate",
       ["p50 latency vs offered rate, same fleet and sweep as the panels above. Log latency scale.",
-       "At 100k: relay 986 µs, output brpc 844 / gRPC 850 / WebSocket 978 µs; synchronous ack 1373 µs.",
+       _sub,
        "Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms."])
     y1ms = ym(1000)
     o.append(f'<rect x="{L}" y="{y1ms:.1f}" width="{PW}" height="{T+PH-y1ms:.1f}" fill="{BAND}"/>')
     o.append(f'<text x="{L+8}" y="{y1ms+15:.1f}" font-size="11" fill="{MUTED}">at or below 1 ms</text>')
-    axes(o,L,T,PW,PH,XMAX,25000,[1000,2000,5000,10000,50000,200000],"p50 latency, log scale",ym,
+    axes(o,L,T,PW,PH,XMAX,XSTEP,[1000,2000,5000,10000,50000,200000],"p50 latency, log scale",ym,
          lambda v: f"{v//1000} ms" if v>=1000 else f"{v} µs")
     # Legend only, no direct line-end labels: every series collapses
     # past its knee, so all five line-ends pile into the top-right
