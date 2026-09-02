@@ -828,9 +828,11 @@ charts: chart chart-relay
 SWEEP_FIX_INLINE_CSV ?= fix-inline.csv
 ## Bare braft on the same fleet, drawn as the floor beneath the gateways.
 BRAFT_FLOOR_CSV ?= ../braft/braft-multi-c7a.csv
+## The journal-segment tail A/B, charted as two arms of one experiment.
+SEGMENT_TAIL_CSV ?= journal-segment-tail.csv
 charts-gateways:
 	python3 ../sweep/mkcharts.py $(SWEEP_OUTPUT_CSV) $(SWEEP_FIX_CSV) \
-		$(SWEEP_FIX_INLINE_CSV) $(BRAFT_FLOOR_CSV) $(CHART_DIR)
+		$(SWEEP_FIX_INLINE_CSV) $(BRAFT_FLOOR_CSV) $(SEGMENT_TAIL_CSV) $(CHART_DIR)
 
 charts-all:
 	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(SWEEP_DIRECT_CSV) $(SWEEP_RELAY_CSV) \
