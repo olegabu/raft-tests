@@ -10,3 +10,8 @@ sequencer-fix-inline,175000,174862,2934,4532,6296,11016,44576,0,1,nodes-3x-c7a.4
 sequencer-fix-inline,200000,199533,3314,5124,7552,22240,44032,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
 sequencer-fix-inline,225000,224768,3608,5784,19648,54208,71040,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
 sequencer-fix-inline,250000,249744,4100,6540,9360,19984,45088,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-inline,300000,299555,4808,8044,26512,31680,45216,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-inline,325000,322274,6292,46624,107136,110208,113920,29454,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-inline,350000,328810,101376,107904,129920,136448,151296,495664,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-inline,400000,320558,119872,128384,155904,172416,182528,2184587,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-inline,500000,313540,155776,163840,201088,214912,221440,5143724,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge

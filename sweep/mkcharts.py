@@ -249,16 +249,16 @@ CFG={
  # 3.5x above it. Same axes for all three on purpose: the whole point
  # of charting them separately is that they are now hard to tell
  # apart, and shared axes are what makes that visible.
- "sequencer-output-brpc": (260000,50000,(500,200000),
+ "sequencer-output-brpc": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 150000,
-                     [],
-                     "sequencer-output-brpc — brpc Streaming RPC, sub-1ms to 150k",
-                     "Five client boxes, one gateway, per-client topics. Zero drops to 250k; p99 rises 864us to 3668us, monotone."),
- "sequencer-output-grpc": (260000,50000,(500,200000),
+                     [(312000,"knee",16)],
+                     "sequencer-output-brpc — brpc Streaming RPC, clean to 300k",
+                     "Five client boxes, one gateway, per-client topics. 300k at 1484us with zero drops; collapses by 325k."),
+ "sequencer-output-grpc": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 175000,
-                     [],
-                     "sequencer-output-grpc — real gRPC streaming, sub-1ms to 175k",
-                     "Zero drops to 250k. p99 3966us at the top of the ladder, and the curve is monotone throughout."),
+                     [(312000,"knee",16)],
+                     "sequencer-output-grpc — real gRPC streaming, clean to 300k",
+                     "Carries 300k with zero drops at 1489us; by 325k it has gone. Achieved plateaus near 320k however much more is offered."),
  # FIX carries no knee marker because the sweep never found one: it
  # absorbed every rate to 250k (248,959 of 250,000, p50 1949us) with the
  # rig's own schedule lag still at 1us. Drawing a dashed "knee" here
@@ -269,11 +269,11 @@ CFG={
  # output reaches a FIX client by the journal (specification.md 8.11),
  # so the median carries a commit-then-read cycle the output gateways'
  # subscribers do not pay.
- "sequencer-fix": (260000,50000,(500,200000),
+ "sequencer-fix": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 25000,
-                     [],
-                     "sequencer-fix - FIX 4.4 order entry, delivered from the journal",
-                     "ONE gateway, five sessions, both directions. Carries 250k at 2.4ms with zero drops; sub-1ms only to 25k."),
+                     [(450000,"knee",16)],
+                     "sequencer-fix - FIX 4.4 from the journal, the furthest-reaching arm",
+                     "ONE gateway, five sessions, both directions. Zero drops through 400k -- further than any other arm -- and collapses by 500k."),
  # The same gateway as sequencer-fix, answering from the propose
  # receipt instead of the journal (--inline_designated_outputs). Charted
  # as its own curve because it is a different round trip, not a tuning
@@ -286,21 +286,21 @@ CFG={
  # into a single ProposeBatch. So the gateways carrying 250k client
  # requests while this collapses at 225k ops is arithmetic, not a
  # paradox, and the two curves must not be read as the same quantity.
- "braft-multi": (260000,50000,(500,200000),
+ "braft-multi": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 125000,
                      [(212000,"knee",16)],
                      "braft-multi - bare braft, no sequencer, five client boxes",
-                     "One raft op per request, unbatched. Clean to 200k at 1.7ms; collapses by 225k."),
- "sequencer-fix-inline": (260000,50000,(500,200000),
+                     "One raft op per request, unbatched: 200k at 1.7ms, collapsing by 225k. The gateways pass it because they batch."),
+ "sequencer-fix-inline": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 75000,
-                     [],
+                     [(312000,"knee",16)],
                      "sequencer-fix-inline - FIX 4.4, answered from the propose receipt",
-                     "Faster below ~100k, slower above: one send per reply, where the journal path coalesces whatever the ring drained."),
- "sequencer-output-websocket": (260000,50000,(500,200000),
+                     "Faster below ~100k and worse above, and it knees at 300k where the journal path runs to 400k: one send per reply, uncoalesced."),
+ "sequencer-output-websocket": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 150000,
-                     [],
-                     "sequencer-output-websocket — Boost.Beast WebSocket, sub-1ms to 150k",
-                     "Its own writer thread per connection. p90 diverges from the other two above 150k; p50 does not."),
+                     [(312000,"knee",16)],
+                     "sequencer-output-websocket — Boost.Beast WebSocket, clean to 300k",
+                     "Its own writer thread per connection: p90 leaves the other two above 150k while p50 does not. Same 300k ceiling."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:
