@@ -278,20 +278,6 @@ CFG={
  # receipt instead of the journal (--inline_designated_outputs). Charted
  # as its own curve because it is a different round trip, not a tuning
  # of the same one.
- # The journal-segment tail experiment: the SAME gateway, same fleet,
- # same rates, differing only in how often the journal rolls. Two charts
- # rather than one overlay because the finding is in p99 and p999, which
- # the per-product chart draws and the p50 overlay does not.
- "sequencer-output-brpc-seg1m": (160000,25000,(500,200000),
-                     [500,1000,2000,5000,10000,50000,200000], 125000,
-                     [],
-                     "brpc, 1.05M-record journal segments (the default)",
-                     "A segment rolls every ~8.4s at 125k. p99 17-60ms, p999 92-119ms, and drops at every rate."),
- "sequencer-output-brpc-seg16m": (160000,25000,(500,200000),
-                     [500,1000,2000,5000,10000,50000,200000], 150000,
-                     [],
-                     "brpc, 16.8M-record journal segments (16x fewer rolls)",
-                     "Identical in every other respect. p99 ~2ms, p999 3-5ms, zero drops -- the tail was the rollover."),
  # Bare braft, five clients, same fleet -- the consensus floor.
  #
  # NOT the gateways' ceiling, which is what it looks like until you
