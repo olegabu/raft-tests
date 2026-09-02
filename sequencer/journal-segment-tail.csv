@@ -1,0 +1,7 @@
+product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet
+sequencer-output-brpc-seg1m,100000,99786,907,1111,17344,119488,139904,3362,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-output-brpc-seg1m,125000,124621,951,1193,26480,92608,122688,686,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-output-brpc-seg1m,150000,149396,1012,1284,60224,106688,119872,3782,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-output-brpc-seg16m,100000,99955,866,1053,1842,3688,6900,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-output-brpc-seg16m,125000,124944,919,1134,2072,5084,11104,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-output-brpc-seg16m,150000,149932,967,1220,1950,3406,6188,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge

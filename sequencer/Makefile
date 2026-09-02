@@ -292,6 +292,7 @@ define start_node
 			--raft_max_segment_size=$(SEGMENT_SIZE) \
 			--raft_trace_append_entry_latency=$(TRACE_LAT) \
 			--raft_append_entry_high_lat_us=$(HIGH_LAT_US) \
+			$(JOURNAL_GEOMETRY_FLAGS) \
 			--logtostderr --logbufsecs=0 \
 			> $(NODE_DIR)/std.log 2>&1 < /dev/null & echo \$$! > $(APP)_node.pid"
 endef
@@ -693,6 +694,32 @@ SWEEP_RELAY_CSV ?= seq-relay.csv
 ## because that is the only one now: the single-client seq-output.csv
 ## was deleted along with sweep-output.sh, its "knee" having been the
 ## one client box running out of send capacity.
+## Journal segment geometry, for the tail-latency experiment.
+##
+## Every gateway flavor shows a 50-240us... no: 50-240 MILLISECOND p999
+## at every rate from 75k up, while bare braft on the same fleet stays
+## under 2ms. The journal is the thing sequencer has that braft does
+## not, and it rolls to a new segment every ~1.05M records -- every
+## ~8.4s at 125k -- creating a fresh 16MiB index file each time.
+##
+## Rolls x stall-duration x rate is what decides whether those stalls
+## land in p999 or cross into p99, which is exactly where the measured
+## crossover sits. Raising the record count makes rolls proportionally
+## rarer; if the tail follows, the segment roll is the cause.
+##
+## ONLY read when a journal is created -- reopening takes geometry from
+## the manifest -- so clean-data must precede any change here.
+## Raise these TOGETHER, keeping their product constant. A segment's
+## data file is reserved at records_per_segment * max_record_bytes, and
+## the default pair reserves 256 GiB (1,048,576 x 262,144). Raising the
+## record count 16x on its own asks for a 4.4 PB sparse file, which is
+## past ext4's 16 TB per-file limit and simply fails to start.
+JOURNAL_RECORDS_PER_SEGMENT ?=
+JOURNAL_MAX_RECORD_BYTES ?=
+JOURNAL_GEOMETRY_FLAGS = \
+	$(if $(JOURNAL_RECORDS_PER_SEGMENT),--journal_records_per_segment=$(JOURNAL_RECORDS_PER_SEGMENT),) \
+	$(if $(JOURNAL_MAX_RECORD_BYTES),--journal_max_record_bytes=$(JOURNAL_MAX_RECORD_BYTES),)
+
 SWEEP_OUTPUT_CSV ?= seq-output-multi.csv
 CHART_DIR       ?= .
 
