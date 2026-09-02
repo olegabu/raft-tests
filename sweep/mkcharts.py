@@ -282,10 +282,10 @@ CFG={
  # 8.13). Its ceiling is the finding: it carries 125k and collapses by
  # 150k, plateauing near 141k, where the hffix arm runs to 400k.
  "sequencer-quickfix": (520000,100000,(500,200000),
-                     [500,1000,2000,5000,10000,50000,200000], 75000,
-                     [(137000,"knee",16)],
+                     [500,1000,2000,5000,10000,50000,200000], 100000,
+                     [(162000,"knee",16)],
                      "sequencer-quickfix - FIX 4.4 on QuickFIX's session layer",
-                     "Slightly faster than the hffix arm below 50k, and out of road at 140k where that one reaches 400k."),
+                     "Carries 150k at 1657us, collapses by 175k, plateaus near 158k -- against 400k on the hffix arm."),
  # Bare braft, five clients, same fleet -- the consensus floor.
  #
  # NOT the gateways' ceiling, which is what it looks like until you
