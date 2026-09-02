@@ -22,9 +22,10 @@ These back the three `fleet-*.svg` charts in the parent README's
 because the standard sweep scripts extract one percentile per run,
 which makes ack and dissemination numbers come from different runs and
 therefore not comparable (see the parent README's observer caveat).
-Its ack column was recovered from the per-rate logs
-`sweep-output.sh` leaves in `/tmp`, so both figures describe identical
-traffic.
+Its ack column was recovered from the per-rate logs the then-current
+`sweep-output.sh` left in `/tmp`, so both figures describe identical
+traffic. (That script has since been deleted in favour of the
+five-client `sweep-output-multi`; these numbers predate the change.)
 
 **Do not merge these into one file and chart them together the way
 `mkcharts.py` merges per-product CSVs.** That script averages rows

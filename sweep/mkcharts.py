@@ -262,6 +262,15 @@ CFG={
                      [],
                      "sequencer-fix - FIX 4.4 order entry, no knee to 250k",
                      "Two gateways, five client boxes, journal delivery. Absorbs 250k; p50 rises 750us to 1949us across the range."),
+ # The same gateway as sequencer-fix, answering from the propose
+ # receipt instead of the journal (--inline_designated_outputs). Charted
+ # as its own curve because it is a different round trip, not a tuning
+ # of the same one.
+ "sequencer-fix-inline": (260000,50000,(500,200000),
+                     [500,1000,2000,5000,10000,50000,200000], 55000,
+                     [],
+                     "sequencer-fix-inline - FIX 4.4, answered from the propose receipt",
+                     "Skips the journal-to-wire hop by replying at commit; the journal copy of the same output is suppressed."),
  "sequencer-output-websocket": (170000,25000,(500,100000),
                      [500,1000,2000,5000,10000,50000,100000], 120000,
                      [(145000,"rig limit",16)],
@@ -332,7 +341,8 @@ RT = [("sequencer",                   "synchronous ack", C1),
       # deliberate exercise (run the palette validator) rather than a
       # guess. C1 is free whenever the ack path is not in the same CSV,
       # which is the case for the gateway-comparison sweep.
-      ("sequencer-fix",               "FIX 4.4",         C1)]
+      ("sequencer-fix",               "FIX 4.4 (journal)", C1),
+      ("sequencer-fix-inline",        "FIX 4.4 (inline)",  C2)]
 rt_present = [(n,lab,c) for n,lab,c in RT if n in D]
 if len(rt_present) >= 2:
     # Rows follow from how many round trips the CSVs actually carry.

@@ -315,7 +315,7 @@ latency on placement; measuring showed that was wrong.
 ### Ack and dissemination, from the same runs
 
 The round-trip table above draws its ack from `make sweep` (no
-observer) and its dissemination from `make sweep-output` (necessarily
+observer) and its dissemination from `make sweep-output-multi` (necessarily
 with one), and those are not comparable — see the observer caveat
 there. Extracting both percentiles from the *same* load-generator runs
 removes that problem entirely:
@@ -458,20 +458,37 @@ shape so `mkcharts.py` reads it identically. Uses the same
 `SWEEP_RATES`/`SWEEP_WARMUP`/`SWEEP_MEASURE` as `sweep`, writing
 `SWEEP_RELAY_CSV` (default `seq-relay.csv`) instead of `SWEEP_CSV`.
 
-### Phase 4: `make sweep-output-all`
+### Phase 4: `make sweep-output-multi-all`
 
 ```sh
-make sweep-output-all                             # all three flavors, into seq-output.csv
-make sweep-output OUTPUT_GATEWAY_FLAVOR=grpc      # just one (its gateway must already be up)
+make sweep-output-multi-all                            # all three flavors, into seq-output-multi.csv
+make sweep-output-multi OUTPUT_GATEWAY_FLAVOR=grpc     # just one (its gateway must already be up)
 ```
 
-The output-gateway counterpart, via `sweep-output.sh` — same idea
-again, reading the flavor-namespaced `output_<flavor>_p50_us` labels.
-Only one output gateway can run at a time (all three flavors share
-`OUTPUT_GATEWAY_PORT` and one pidfile), so `sweep-output-all` gives
-each flavor its own full stop / `clean-data` / start cycle before
-sweeping it, and appends all three into one CSV tagged
-`product=sequencer-output-<flavor>`.
+The output-gateway counterpart, driven from **all five client boxes**
+via `../sweep/sweep-multi.sh`, and appending all three flavors into one
+CSV tagged `product=sequencer-output-<flavor>`. One gateway process
+serves all three protocols at once, so a single cluster lifetime covers
+the lot and what differs between the curves is the subscribe protocol
+and nothing else.
+
+It drives from five boxes because the single-box version it replaced
+(`sweep-output.sh`, deleted) was measuring its own client: all three
+flavors "kneed" at exactly 145k with the load generator's schedule lag
+jumping from ~100 µs to over half a second, which is a client falling
+over rather than a gateway. The same gateways run past 200k when five
+boxes share the offered rate.
+
+Two things this depends on, both easy to get wrong:
+
+- `--output_hdr_raw_out`, not `--hdr_raw_out`. The merge has to combine
+  the **output** path's histograms; `--hdr_raw_out` writes the ack
+  path's, and merging those would quietly report a different round trip.
+  Percentiles cannot be averaged across clients — see `merge-hdr.py`.
+- Per-client topics. `CounterOutputCodec` publishes to the submitting
+  client's own `totals-<id>`, so each subscriber receives only its own
+  traffic. On one shared topic the gateway's delivery load is
+  (rate × subscribers), and each client parses five times what it needs.
 
 ### Everything at once: `make sweep-all`
 

@@ -107,6 +107,12 @@ FIX_ENV := $(if $(FIX_STAGE_TIMERS),FIX_STAGE_TIMERS=$(FIX_STAGE_TIMERS),)
 ## Answer from the propose receipt instead of the journal (see the
 ## gateway's --inline_designated_outputs). Default false = §8.11.
 FIX_INLINE ?= false
+
+## The product name rows are written under. The two delivery paths are
+## charted as separate curves, so they must not share a name: with
+## FIX_INLINE=true the same gateway answers from the propose receipt
+## instead of the journal, which is a different round trip.
+FIX_PRODUCT ?= $(if $(filter true,$(FIX_INLINE)),sequencer-fix-inline,sequencer-fix)
 FIX_PORT         ?= 8700
 FIX_SESSIONS     ?= 3
 
@@ -428,16 +434,67 @@ SWEEP_FIX_RATES ?= 10000 25000 50000 75000 100000 150000
 FIX_CLIENT_CMD = ./$(APP)_load_generator \
 	--fix_gateway_addr=$(subst $(SPACE),$(COMMA),$(FIX_ENDPOINTS)) \
 	--fix_sender_comp_id=FIX{CLIENT} \
-	--fix_client_id={CLIENT} \
+	--client_id={CLIENT} \
 	--mode open --pace $(PACE) --rate {RATE} --burst $(BURST) \
 	--warmup $(SWEEP_WARMUP) --measure $(SWEEP_MEASURE) \
 	--drain_timeout $(DRAIN_TIMEOUT) --hdr_raw_out {RAW} --logtostderr
+
+## The output-gateway sweep, driven from all five client boxes.
+##
+## The old single-box sweep-output.sh (deleted) drove from ONE box, and
+## that turned out to be the
+## thing the earlier charts were measuring: all three flavors "kneed" at
+## exactly 145k with the load generator's own schedule lag jumping from
+## ~100us to over half a second, which is a client falling over, not a
+## gateway. FIX reached 250k on this rig with lag=1us because five boxes
+## shared the offered rate.
+##
+## {RAW} goes to --output_hdr_raw_out, NOT --hdr_raw_out: the merge has
+## to combine the OUTPUT path's histograms. --hdr_raw_out would merge
+## the ack path and quietly report the wrong round trip.
+##
+## Each client submits through the input gateway in its own process
+## space (start-multi) and observes ONE output gateway on NODE1, so the
+## fan-out being measured is five subscribers against one gateway --
+## the same shape as one FIX gateway serving five sessions.
+OUTPUT_CLIENT_CMD = ./$(APP)_load_generator \
+	--input_gateway_addr=127.0.0.1:$(INPUT_GATEWAY_PORT) \
+	--client_id={CLIENT} \
+	--output_observer=$(OUTPUT_GATEWAY_FLAVOR) \
+	--output_gateway_addr=$(NODE1_PRIV):$(OUTPUT_SWEEP_PORT) \
+	--mode open --pace $(PACE) --thread_num {THREADS} --rate {RATE} --burst $(BURST) \
+	--warmup $(SWEEP_WARMUP) --measure $(SWEEP_MEASURE) \
+	--drain_timeout $(DRAIN_TIMEOUT) --output_hdr_raw_out {RAW} --logtostderr
+
+OUTPUT_SWEEP_PORT = $(if $(filter grpc,$(OUTPUT_GATEWAY_FLAVOR)),$(OUTPUT_GRPC_PORT),$(if $(filter websocket,$(OUTPUT_GATEWAY_FLAVOR)),$(OUTPUT_WEBSOCKET_PORT),$(OUTPUT_BRPC_PORT)))
+
+sweep-output-multi:
+	@test -n "$(OUTPUT_GATEWAY_FLAVOR)" || \
+		{ echo "sweep-output-multi: set OUTPUT_GATEWAY_FLAVOR=grpc|brpc|websocket" >&2; exit 1; }
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
+		CLIENT_CMD="$(OUTPUT_CLIENT_CMD)" \
+		../sweep/sweep-multi.sh sequencer-output-$(OUTPUT_GATEWAY_FLAVOR) . \
+		"$(abspath $(SWEEP_OUTPUT_CSV))" \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
+
+## All three flavors from five clients, one cluster lifetime. The
+## gateway process serves all three protocols at once, so what differs
+## between the curves is the subscribe protocol and nothing else.
+sweep-output-multi-all:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_OUTPUT_CSV)
+	$(MAKE) stop-multi >/dev/null 2>&1 || true
+	$(MAKE) clean-data >/dev/null 2>&1
+	$(MAKE) start-multi OUTPUT_GATEWAY_FLAVOR=brpc >/dev/null 2>&1
+	sleep 5
+	for f in grpc brpc websocket; do \
+		$(MAKE) --no-print-directory sweep-output-multi OUTPUT_GATEWAY_FLAVOR=$$f ; \
+	done
 
 sweep-fix:
 	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_FIX_CSV)
 	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
 		CLIENT_CMD="$(FIX_CLIENT_CMD)" \
-		../sweep/sweep-multi.sh sequencer-fix . "$(abspath $(SWEEP_FIX_CSV))" \
+		../sweep/sweep-multi.sh $(FIX_PRODUCT) . "$(abspath $(SWEEP_FIX_CSV))" \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_FIX_RATES)
 
 ## Push the client-side binaries to EVERY client box, not just
@@ -631,12 +688,16 @@ SWEEP_DIRECT_CSV ?= seq-direct.csv
 SWEEP_RELAY_CSV ?= seq-relay.csv
 # Phase 4: all three output-gateway flavors land in ONE csv (rows are
 # tagged product=sequencer-output-<flavor>), because the interesting
-# comparison is across flavors — see `sweep-output-all` below.
-SWEEP_OUTPUT_CSV ?= seq-output.csv
+# comparison is across flavors — see `sweep-output-multi-all` below.
+## The output-gateway sweep's results. Named for the multi-client rig
+## because that is the only one now: the single-client seq-output.csv
+## was deleted along with sweep-output.sh, its "knee" having been the
+## one client box running out of send capacity.
+SWEEP_OUTPUT_CSV ?= seq-output-multi.csv
 CHART_DIR       ?= .
 
-.PHONY: sweep sweep-multi sweep-multi-baseline sweep-direct sweep-relay sweep-output sweep-output-all sweep-all \
-        chart chart-relay chart-output charts charts-all
+.PHONY: sweep sweep-multi sweep-multi-baseline sweep-direct sweep-relay sweep-output-multi sweep-output-multi-all sweep-all \
+        chart chart-relay chart-output charts charts-all charts-gateways
 
 ## Phase 1's sweep: reuses ../sweep/sweep.sh unmodified, against
 ## SWEEP_RATES (override to change the range), writing SWEEP_CSV
@@ -692,44 +753,10 @@ sweep-relay:
 	./sweep-relay.sh "$(abspath $(SWEEP_RELAY_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
 		"RELAY_GRPC_ADDR=$(NODE1_PRIV):$(RELAY_GRPC_PORT)" $(SWEEP_RATES)
 
-## Phase 4's sweep, one flavor. Requires that flavor's gateway to
-## already be up (`make start OUTPUT_GATEWAY_FLAVOR=<flavor>`) —
-## sweep-output-all below does that part for you.
-sweep-output:
-	@test -n "$(OUTPUT_GATEWAY_FLAVOR)" || \
-		{ echo "sweep-output: set OUTPUT_GATEWAY_FLAVOR=grpc|brpc|websocket" >&2; exit 1; }
-	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_OUTPUT_CSV)
-	./sweep-output.sh $(OUTPUT_GATEWAY_FLAVOR) "$(abspath $(SWEEP_OUTPUT_CSV))" \
-		$(SWEEP_WARMUP) $(SWEEP_MEASURE) \
-		"OUTPUT_OBSERVER=$(OUTPUT_GATEWAY_FLAVOR) OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$(OUTPUT_GATEWAY_PORT)" \
-		$(SWEEP_RATES)
-
-## All three flavors, appended into one CSV — now against ONE cluster
-## lifetime, because one gateway process serves all three protocols at
-## once. Previously each flavor needed its own stop/clean-data/start
-## cycle (they shared a port and a pidfile), which meant the three
-## flavors' numbers came from three different runs and carried
-## run-to-run variance into every cross-flavor comparison. They now
-## share a journal, a codec pass and a ring, and differ only in which
-## protocol the load generator subscribes over.
-sweep-output-all:
-	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_OUTPUT_CSV)
-	$(MAKE) stop >/dev/null 2>&1 || true
-	$(MAKE) clean-data >/dev/null 2>&1
-	$(MAKE) start OUTPUT_GATEWAY_FLAVOR=brpc >/dev/null 2>&1
-	sleep 5
-	for f in grpc brpc websocket; do \
-		./sweep-output.sh $$f "$(abspath $(SWEEP_OUTPUT_CSV))" $(SWEEP_WARMUP) $(SWEEP_MEASURE) \
-			"OUTPUT_OBSERVER=$$f OUTPUT_GATEWAY_ADDR=$(NODE1_PRIV):$$(case $$f in \
-				brpc) echo $(OUTPUT_BRPC_PORT);; \
-				grpc) echo $(OUTPUT_GRPC_PORT);; \
-				websocket) echo $(OUTPUT_WEBSOCKET_PORT);; esac)" \
-			$(SWEEP_RATES) ; \
-	done
-
 ## Every round trip this repo measures for sequencer, in one go:
 ## phase 1 (synchronous ack), phase 3 (relay), phase 4 (all three
-## output-gateway flavors). Each phase re-cleans the journal first, so
+## output-gateway flavors, from all five client boxes). Each phase
+## re-cleans the journal first, so
 ## this is the single reproducible entry point behind every sequencer
 ## chart in README.md. Long — five full rate sweeps.
 sweep-all:
@@ -739,7 +766,7 @@ sweep-all:
 	sleep 5
 	$(MAKE) sweep
 	$(MAKE) sweep-relay
-	$(MAKE) sweep-output-all
+	$(MAKE) sweep-output-multi-all
 
 ## Regenerates knee-sequencer.svg (and knee-curves.svg, if SWEEP_CSV
 ## happens to also carry aeron/braft/openraft rows) from SWEEP_CSV
@@ -765,6 +792,17 @@ charts: chart chart-relay
 ## (round-trips.svg) that only exists when all five sweeps are handed
 ## to mkcharts.py together — hence one invocation with every CSV,
 ## rather than `charts chart-output`.
+## The five gateway round trips on shared axes, into CHART_DIR
+## (sequencer/, not the repo root -- the root charts belong to the
+## top-level README's cross-product comparison).
+##
+## One invocation with every gateway CSV, because round-trips.svg and
+## round-trips-p50.svg only exist when mkcharts.py sees them together.
+SWEEP_FIX_INLINE_CSV ?= fix-inline.csv
+charts-gateways:
+	python3 ../sweep/mkcharts.py $(SWEEP_OUTPUT_CSV) $(SWEEP_FIX_CSV) \
+		$(SWEEP_FIX_INLINE_CSV) $(CHART_DIR)
+
 charts-all:
 	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(SWEEP_DIRECT_CSV) $(SWEEP_RELAY_CSV) \
 		$(SWEEP_OUTPUT_CSV) $(CHART_DIR)
