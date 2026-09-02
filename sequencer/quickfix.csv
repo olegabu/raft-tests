@@ -1,0 +1,12 @@
+product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet
+sequencer-quickfix,10000,9975,719,809,901,1042,41184,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,25000,24940,773,891,1054,1294,41792,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,50000,49877,968,1328,2636,4068,41952,2672,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,75000,74815,1047,1273,1652,3494,41856,8854,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,100000,99756,1190,1795,15240,26400,41920,19956,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,125000,124714,2572,11024,21616,29616,46176,30233,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,150000,140177,104960,113280,139136,174720,178944,275029,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,175000,141683,123136,132096,155776,209920,212992,906939,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,200000,141236,141568,151552,185600,222848,224896,1642291,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,225000,141498,159104,171392,189952,267776,272640,2365169,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-quickfix,250000,140849,174976,191232,274176,373760,377344,3012413,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge

@@ -278,6 +278,14 @@ CFG={
  # receipt instead of the journal (--inline_designated_outputs). Charted
  # as its own curve because it is a different round trip, not a tuning
  # of the same one.
+ # The same gateway on QuickFIX's session layer (specification.md
+ # 8.13). Its ceiling is the finding: it carries 125k and collapses by
+ # 150k, plateauing near 141k, where the hffix arm runs to 400k.
+ "sequencer-quickfix": (520000,100000,(500,200000),
+                     [500,1000,2000,5000,10000,50000,200000], 75000,
+                     [(137000,"knee",16)],
+                     "sequencer-quickfix - FIX 4.4 on QuickFIX's session layer",
+                     "Slightly faster than the hffix arm below 50k, and out of road at 140k where that one reaches 400k."),
  # Bare braft, five clients, same fleet -- the consensus floor.
  #
  # NOT the gateways' ceiling, which is what it looks like until you
@@ -371,6 +379,13 @@ RT = [("sequencer",                   "synchronous ack", C1),
       # Muted, not a sixth categorical hue: this is the floor the others
       # stand on, a reference rather than a peer. It also keeps the
       # palette at the five slots that were checked all-pairs for CVD.
+      # NOT from the validated five. The palette's all-pairs CVD check
+      # covers C1-C5; this is a sixth categorical hue added because the
+      # overlay now carries seven series, and it has NOT been run
+      # through scripts/validate_palette.js (node is not available on
+      # the machine that drew this). Validate it before publishing the
+      # chart anywhere it matters, and re-step it if it fails.
+      ("sequencer-quickfix",          "FIX 4.4 (QuickFIX)", "#a16207"),
       ("braft-multi",                 "braft (raw ops)",   INK2)]
 rt_present = [(n,lab,c) for n,lab,c in RT if n in D]
 if len(rt_present) >= 2:

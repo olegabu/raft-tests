@@ -97,6 +97,23 @@ OUTPUT_GATEWAY_BIN    := $(APP)_output_gateway
 # ~20k/s and three carried ~45k/s through one gateway.
 FIX_GATEWAY_BIN  := $(APP)_fix_gateway
 
+## The QuickFIX-backed gateway (specification.md 8.13). Same codecs,
+## same journal, same clients -- QuickFIX's session layer instead of
+## ours, so a like-for-like sweep is the only way to price it.
+QUICKFIX_GATEWAY_BIN := $(APP)_quickfix_gateway
+## QuickFIX 1.15.1 has no dynamic acceptor sessions, so every client's
+## CompID must be declared before it connects -- the one configuration
+## the hffix gateway does not need, since it adopts identity from the
+## Logon.
+##
+## DERIVED, not typed out: the load generator names each session
+## "<fix_sender_comp_id>-<index>", one per address in
+## --fix_gateway_addr, so the real CompIDs are FIX0-0, FIX0-1, ... A
+## hand-written list of FIX0..FIX4 looked right and matched nothing;
+## every client failed to log on and the sweep reported an achieved
+## rate of zero, with the gateway healthy and listening the whole time.
+QUICKFIX_CLIENT_COMP_IDS = $(subst $(SPACE),$(COMMA),$(foreach c,$(shell seq 0 $$(( $(words $(CLIENTS)) - 1 ))),$(foreach i,$(shell seq 0 $$(( $(FIX_ENDPOINT_COUNT) - 1 ))),FIX$(c)-$(i))))
+
 ## Environment forwarded into the remote gateway process. `make` does not
 ## carry its own environment across ssh, so FIX_STAGE_TIMERS=1 on the
 ## command line reached the local make and nothing else -- a whole run was
@@ -212,7 +229,7 @@ PEERS      = $(NODE1_PRIV):$(PORT):0,$(NODE2_PRIV):$(PORT):0,$(NODE3_PRIV):$(POR
 NODE_DIR   = /data/$(APP)
 CLIENT_DIR = $(APP)
 
-.PHONY: build push push-multi start start-multi start-fix sweep-fix stop stop-fix stop-multi clean-data client client-relay client-output client-fix logs-fix transfer-leader leader logs logs-relay logs-output
+.PHONY: build push push-multi start start-multi start-fix sweep-fix start-quickfix start-quickfix-on push-quickfix stop-quickfix sweep-quickfix stop stop-fix stop-multi clean-data client client-relay client-output client-fix logs-fix transfer-leader leader logs logs-relay logs-output
 
 ## Build sequencer's Release preset (this is a benchmarking repo — see
 ## sequencer's own README's debug-vs-release note); requires a sibling
@@ -348,6 +365,56 @@ start-fix:
 		$(MAKE) --no-print-directory start-fix-on FIX_HOST=$$h; \
 	done
 	@echo "$(FIX_GATEWAYS) gateway(s) on each of: $(FIX_NODES_PUBLIC)"
+
+start-quickfix: push-quickfix
+	@for h in $(FIX_NODES_PUBLIC); do \
+		$(MAKE) --no-print-directory start-quickfix-on FIX_HOST=$$h; \
+	done
+	@echo "$(FIX_GATEWAYS) quickfix gateway(s) on each of: $(FIX_NODES_PUBLIC)"
+
+## RUN `clean-data` FIRST, always: this removes each gateway's resume
+## file, so a gateway started against an accumulated journal replays it
+## from record 1 at full speed and floods its own ring.
+start-quickfix-on:
+	ssh $(SSH_OPTS) $(SSH_USER)@$(FIX_HOST) \
+		"cd $(NODE_DIR) && for i in \$$(seq 0 \$$(( $(FIX_GATEWAYS) - 1 ))); do \
+		   p=\$$(( $(FIX_PORT) + \$$i )); \
+		   rm -rf qfix_resume_\$$i qfix_seq_\$$i; \
+		   nohup ./$(QUICKFIX_GATEWAY_BIN) --node_peers=$(NODE1_PRIV):$(PORT) \
+			--listen_port=\$$p --data_dir=$(NODE_DIR)/data \
+			--resume_file=$(NODE_DIR)/qfix_resume_\$$i \
+			--sequence_store_dir=$(NODE_DIR)/qfix_seq_\$$i \
+			--client_comp_ids=$(QUICKFIX_CLIENT_COMP_IDS) \
+			--logtostderr --logbufsecs=0 \
+			> $(NODE_DIR)/quickfix_gateway_\$$i.log 2>&1 < /dev/null & \
+		   echo \$$! > $(APP)_quickfix_gateway_\$$i.pid; \
+		 done"
+	@sleep 3
+
+push-quickfix:
+	@for h in $(FIX_NODES_PUBLIC); do \
+		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_quickfix_gateway \
+			$(SSH_USER)@$$h:$(NODE_DIR)/ ; \
+	done
+
+stop-quickfix:
+	@for h in $(FIX_NODES_PUBLIC); do \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h \
+		"cd $(NODE_DIR) && for f in $(APP)_quickfix_gateway_*.pid; do \
+		   [ -f \$$f ] && kill -TERM \$$(cat \$$f) 2>/dev/null; done; \
+		 rm -f $(APP)_quickfix_gateway_*.pid; sleep 1; :" ; \
+	done
+
+## The quickfix arm's sweep. Same script, same client command, same
+## rates as sweep-fix -- only the product name differs, so the two land
+## as separate curves on one chart.
+SWEEP_QUICKFIX_CSV ?= quickfix.csv
+sweep-quickfix:
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > $(SWEEP_QUICKFIX_CSV)
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
+		CLIENT_CMD="$(FIX_CLIENT_CMD)" \
+		../sweep/sweep-multi.sh sequencer-quickfix . "$(abspath $(SWEEP_QUICKFIX_CSV))" \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_FIX_RATES)
 
 start-fix-on:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(FIX_HOST) \
@@ -854,7 +921,7 @@ BRAFT_FLOOR_CSV ?= ../braft/braft-multi-c7a.csv
 ## segment prepare/seal) is visible in the full sweeps instead.
 charts-gateways:
 	python3 ../sweep/mkcharts.py $(SWEEP_OUTPUT_CSV) $(SWEEP_FIX_CSV) \
-		$(SWEEP_FIX_INLINE_CSV) $(BRAFT_FLOOR_CSV) $(CHART_DIR)
+		$(SWEEP_FIX_INLINE_CSV) $(SWEEP_QUICKFIX_CSV) $(BRAFT_FLOOR_CSV) $(CHART_DIR)
 
 charts-all:
 	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(SWEEP_DIRECT_CSV) $(SWEEP_RELAY_CSV) \
