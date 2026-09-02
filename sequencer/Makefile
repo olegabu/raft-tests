@@ -471,7 +471,7 @@ OUTPUT_SWEEP_PORT = $(if $(filter grpc,$(OUTPUT_GATEWAY_FLAVOR)),$(OUTPUT_GRPC_P
 sweep-output-multi:
 	@test -n "$(OUTPUT_GATEWAY_FLAVOR)" || \
 		{ echo "sweep-output-multi: set OUTPUT_GATEWAY_FLAVOR=grpc|brpc|websocket" >&2; exit 1; }
-	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
 		CLIENT_CMD="$(OUTPUT_CLIENT_CMD)" \
 		../sweep/sweep-multi.sh sequencer-output-$(OUTPUT_GATEWAY_FLAVOR) . \
 		"$(abspath $(SWEEP_OUTPUT_CSV))" \
@@ -481,7 +481,7 @@ sweep-output-multi:
 ## gateway process serves all three protocols at once, so what differs
 ## between the curves is the subscribe protocol and nothing else.
 sweep-output-multi-all:
-	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_OUTPUT_CSV)
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > $(SWEEP_OUTPUT_CSV)
 	$(MAKE) stop-multi >/dev/null 2>&1 || true
 	$(MAKE) clean-data >/dev/null 2>&1
 	$(MAKE) start-multi OUTPUT_GATEWAY_FLAVOR=brpc >/dev/null 2>&1
@@ -491,8 +491,8 @@ sweep-output-multi-all:
 	done
 
 sweep-fix:
-	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_FIX_CSV)
-	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > $(SWEEP_FIX_CSV)
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
 		CLIENT_CMD="$(FIX_CLIENT_CMD)" \
 		../sweep/sweep-multi.sh $(FIX_PRODUCT) . "$(abspath $(SWEEP_FIX_CSV))" \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_FIX_RATES)
@@ -723,8 +723,8 @@ SWEEP_MULTI_CSV ?= seq-multi.csv
 SWEEP_MULTI_BASELINE_CSV ?= seq-multi-baseline.csv
 
 sweep-multi:
-	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_MULTI_CSV)
-	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) APP=$(APP) INPUT_GATEWAY_PORT=$(INPUT_GATEWAY_PORT) \
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > $(SWEEP_MULTI_CSV)
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) APP=$(APP) FLEET="$(FLEET)" INPUT_GATEWAY_PORT=$(INPUT_GATEWAY_PORT) \
 		../sweep/sweep-multi.sh sequencer-multi . "$(abspath $(SWEEP_MULTI_CSV))" \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
 
@@ -732,8 +732,8 @@ sweep-multi:
 ## identical rig settings, differing only in how many clients carry
 ## the load. Rows are tagged product=sequencer-multi1.
 sweep-multi-baseline:
-	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_MULTI_BASELINE_CSV)
-	CLIENTS="$(CLIENT)" SSH_KEY=$(SSH_KEY) APP=$(APP) INPUT_GATEWAY_PORT=$(INPUT_GATEWAY_PORT) \
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > $(SWEEP_MULTI_BASELINE_CSV)
+	CLIENTS="$(CLIENT)" SSH_KEY=$(SSH_KEY) APP=$(APP) FLEET="$(FLEET)" INPUT_GATEWAY_PORT=$(INPUT_GATEWAY_PORT) \
 		../sweep/sweep-multi.sh sequencer-multi1 . "$(abspath $(SWEEP_MULTI_BASELINE_CSV))" \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
 

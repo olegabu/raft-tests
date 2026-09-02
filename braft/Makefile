@@ -186,8 +186,8 @@ MULTI_CLIENT_CMD = ./run_client.sh --peers '$(PEERS)' --mode open --pace $(PACE)
 	--hdr_raw_out {RAW}
 
 sweep-multi:
-	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_MULTI_CSV)
-	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > $(SWEEP_MULTI_CSV)
+	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
 		CLIENT_CMD="$(MULTI_CLIENT_CMD)" \
 		../sweep/sweep-multi.sh braft-multi . "$(abspath $(SWEEP_MULTI_CSV))" \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)
@@ -195,8 +195,8 @@ sweep-multi:
 ## The N=1 control arm, through the identical script and rig settings so
 ## the only difference is how many boxes carry the load.
 sweep-multi-baseline:
-	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag' > $(SWEEP_MULTI_BASELINE_CSV)
-	CLIENTS="$(CLIENT)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) \
+	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > $(SWEEP_MULTI_BASELINE_CSV)
+	CLIENTS="$(CLIENT)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
 		CLIENT_CMD="$(MULTI_CLIENT_CMD)" \
 		../sweep/sweep-multi.sh braft-multi1 . "$(abspath $(SWEEP_MULTI_BASELINE_CSV))" \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_RATES)

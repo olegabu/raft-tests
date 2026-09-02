@@ -31,6 +31,17 @@
 set -u
 PROD=$1; DIR=$2; CSV=$3; WU=$4; ME=$5; EXTRA=$6; shift 6
 
+# The hardware every row was measured on, carried IN the row.
+#
+# Latency numbers are meaningless without it and filenames do not
+# survive being copied or charted: braft-multi.csv sat in this repo
+# showing bare consensus plateauing at ~245k with nothing recording
+# which fleet produced it, so it could not be compared against a
+# sequencer sweep without guessing. mkcharts.py reads columns by name,
+# so a trailing column is invisible to it and to any older CSV that
+# lacks one.
+FLEET=${FLEET:-unrecorded}
+
 : "${CLIENTS:?set CLIENTS (space-separated client IPs); run \`make env\` first}"
 SSH_KEY=${SSH_KEY:-$HOME/.ssh/id_rsa}
 SSH_USER=${SSH_USER:-ubuntu}
@@ -106,9 +117,9 @@ for R in "$@"; do
   M=$(python3 "$HERE/merge-hdr.py" "${RAWS[@]}" 2>/dev/null)
   echo "$M" | sed '/^merged_/d'
   g() { echo "$M" | grep -oE "^$1=[0-9]+" | cut -d= -f2; }
-  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
     "$PROD" "$R" "$ACH" \
     "$(g merged_p50_us)" "$(g merged_p90_us)" "$(g merged_p99_us)" \
-    "$(g merged_p99_9_us)" "$(g merged_max_us)" "$DROP" "$LAG" >> "$CSV"
+    "$(g merged_p99_9_us)" "$(g merged_max_us)" "$DROP" "$LAG" "$FLEET" >> "$CSV"
   tail -1 "$CSV"
 done

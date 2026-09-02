@@ -383,3 +383,22 @@ difference or worse — see
 `FSM_COMMIT_BATCH`, and [Deciding PIPELINE](#deciding-pipeline)
 for `CONNECTION_TYPE` and `CHANNELS` — `pooled` fails outright at 100k on
 ephemeral port exhaustion, and extra `CHANNELS` had no effect.
+
+## Which fleet each CSV was measured on
+
+Latency numbers mean nothing without the hardware behind them, and a
+filename does not survive being copied into another chart. Rows written
+by `sweep/sweep-multi.sh` now carry a trailing `fleet` column; the files
+that predate it were backfilled from the `deploy/*.tfvars` in effect at
+the commit that added them.
+
+| file | fleet | how established |
+|---|---|---|
+| `braft-multi.csv` | 3× c7a.4xlarge nodes (multi-AZ), 5× c7a.2xlarge clients | `deploy/multi_az.tfvars` at commit `f9e98d9`, which added the file. The 16-vCPU node upgrade (`febdced`) landed 14 h earlier the same day, so this sweep ran after it. |
+| `braft-multi-baseline.csv` | same | same commit, the N=1 control arm of the same run |
+| `braft-multi-c7a.csv` | same | recorded live in the `fleet` column when measured |
+| `braft.csv`, and the `sweep/braft-*.csv` tuning files | **older, mixed** | predate the multi-client rig; several are c6i. Do not compare them against the above without checking the commit that added them. |
+
+`braft-multi.csv` and `braft-multi-c7a.csv` are the same fleet shape
+measured months apart, which makes them a useful consistency check on
+each other rather than a duplication.

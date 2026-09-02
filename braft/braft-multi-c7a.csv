@@ -1,0 +1,2 @@
+product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet
+braft-multi,10000,9995,573,673,729,864,1986,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
