@@ -2,7 +2,7 @@
 <rect width="900" height="470" fill="#fcfcfb"/>
 <text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer: gateway round trips, p50 vs offered rate</text>
 <text x="78" y="46" font-size="12" fill="#52514e">p50 latency vs offered rate, same fleet and sweep as the panels above. Log latency scale.</text>
-<text x="78" y="62" font-size="12" fill="#52514e">At 100k: output: brpc 861 µs; output: gRPC 863 µs; output: WebSocket 854 µs; FIX 4.4 (journal) 1,127 µs; FIX 4.4 (inline) 1,036 µs.</text>
+<text x="78" y="62" font-size="12" fill="#52514e">At 100k: output: brpc 861 µs; output: gRPC 863 µs; output: WebSocket 854 µs; FIX 4.4 (journal) 1,127 µs; FIX 4.4 (inline) 1,036 µs; braft (raw ops) 793 µs.</text>
 <text x="78" y="78" font-size="12" fill="#52514e">Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.</text>
 <rect x="78" y="369.6" width="782" height="26.4" fill="#f0efec"/>
 <text x="86" y="384.6" font-size="11" fill="#898781">at or below 1 ms</text>
@@ -93,6 +93,18 @@
 <circle cx="703.6" cy="306.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="781.8" cy="302.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="860.0" cy="296.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M109.3,398.4 L156.2,402.5 L234.4,398.5 L312.6,395.1 L390.8,381.6 L469.0,373.3 L547.2,367.2 L625.4,360.9 L703.6,342.4 L781.8,132.0 L860.0,126.5" fill="none" stroke="#52514e" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="109.3" cy="398.4" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="156.2" cy="402.5" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="234.4" cy="398.5" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="312.6" cy="395.1" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="390.8" cy="381.6" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="469.0" cy="373.3" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="547.2" cy="367.2" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="625.4" cy="360.9" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="703.6" cy="342.4" r="4.5" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="781.8" cy="132.0" r="4.5" fill="#fcfcfb" stroke="#52514e" stroke-width="2"/>
+<circle cx="860.0" cy="126.5" r="4.5" fill="#fcfcfb" stroke="#52514e" stroke-width="2"/>
 <circle cx="83" cy="454" r="4.5" fill="#1baf7a"/>
 <text x="94" y="458" font-size="11" fill="#52514e">output: brpc</text>
 <circle cx="188.2" cy="454" r="4.5" fill="#b5179e"/>
@@ -103,4 +115,6 @@
 <text x="442.59999999999997" y="458" font-size="11" fill="#52514e">FIX 4.4 (journal)</text>
 <circle cx="569.8" cy="454" r="4.5" fill="#eb6834"/>
 <text x="580.8" y="458" font-size="11" fill="#52514e">FIX 4.4 (inline)</text>
+<circle cx="701.4" cy="454" r="4.5" fill="#52514e"/>
+<text x="712.4" y="458" font-size="11" fill="#52514e">braft (raw ops)</text>
 </svg>

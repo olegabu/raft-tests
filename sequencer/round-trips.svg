@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="942" height="660" viewBox="0 0 942 660" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="sequencer: five round trips, p50 and p99">
+<svg xmlns="http://www.w3.org/2000/svg" width="942" height="660" viewBox="0 0 942 660" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="sequencer: six round trips, p50 and p99">
 <rect width="942" height="660" fill="#fcfcfb"/>
-<text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer: five round trips, p50 and p99</text>
+<text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer: six round trips, p50 and p99</text>
 <text x="78" y="46" font-size="12" fill="#52514e">Every hop this repo measures, same fleet and same sweep. Identical axes across panels; log latency scale.</text>
 <text x="78" y="62" font-size="12" fill="#52514e">Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.</text>
 <text x="78" y="78" font-size="12" fill="#52514e">Past the knee, latency runs to whole seconds; those points clip at the panel top.</text>
@@ -10,6 +10,7 @@
 <clipPath id="pan2"><rect x="644" y="118" width="280" height="208"/></clipPath>
 <clipPath id="pan3"><rect x="56" y="372" width="280" height="208"/></clipPath>
 <clipPath id="pan4"><rect x="350" y="372" width="280" height="208"/></clipPath>
+<clipPath id="pan5"><rect x="644" y="372" width="280" height="208"/></clipPath>
 </defs>
 <rect x="62" y="297.3" width="268" height="22.7" fill="#f0efec"/>
 <line x1="62" y1="297.3" x2="330" y2="297.3" stroke="#e1e0d9" stroke-width="1"/>
@@ -236,6 +237,50 @@
 <circle cx="570.4" cy="511.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="597.2" cy="508.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="624.0" cy="505.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+</g>
+<rect x="650" y="551.3" width="268" height="22.7" fill="#f0efec"/>
+<line x1="650" y1="551.3" x2="918" y2="551.3" stroke="#e1e0d9" stroke-width="1"/>
+<line x1="650" y1="476.0" x2="918" y2="476.0" stroke="#e1e0d9" stroke-width="1"/>
+<line x1="650" y1="400.7" x2="918" y2="400.7" stroke="#e1e0d9" stroke-width="1"/>
+<line x1="650" y1="574" x2="918" y2="574" stroke="#c3c2b7" stroke-width="1"/>
+<line x1="650.0" y1="574" x2="650.0" y2="578" stroke="#c3c2b7" stroke-width="1"/>
+<text x="650.0" y="591" font-size="10" fill="#898781" text-anchor="middle">0k</text>
+<line x1="703.6" y1="574" x2="703.6" y2="578" stroke="#c3c2b7" stroke-width="1"/>
+<text x="703.6" y="591" font-size="10" fill="#898781" text-anchor="middle">50k</text>
+<line x1="757.2" y1="574" x2="757.2" y2="578" stroke="#c3c2b7" stroke-width="1"/>
+<text x="757.2" y="591" font-size="10" fill="#898781" text-anchor="middle">100k</text>
+<line x1="810.8" y1="574" x2="810.8" y2="578" stroke="#c3c2b7" stroke-width="1"/>
+<text x="810.8" y="591" font-size="10" fill="#898781" text-anchor="middle">150k</text>
+<line x1="864.4" y1="574" x2="864.4" y2="578" stroke="#c3c2b7" stroke-width="1"/>
+<text x="864.4" y="591" font-size="10" fill="#898781" text-anchor="middle">200k</text>
+<line x1="918.0" y1="574" x2="918.0" y2="578" stroke="#c3c2b7" stroke-width="1"/>
+<text x="918.0" y="591" font-size="10" fill="#898781" text-anchor="middle">250k</text>
+<text x="650" y="370" font-size="12" font-weight="600" fill="#0b0b0b">braft (raw ops)</text>
+<g clip-path="url(#pan5)">
+<path d="M660.7,561.7 L676.8,566.7 L703.6,561.1 L730.4,556.2 L757.2,548.4 L784.0,543.7 L810.8,539.9 L837.6,531.3 L864.4,493.3 L891.2,397.5 L918.0,394.2" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="660.7" cy="561.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="676.8" cy="566.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="703.6" cy="561.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="730.4" cy="556.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="757.2" cy="548.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="784.0" cy="543.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="810.8" cy="539.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="837.6" cy="531.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="864.4" cy="493.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="891.2" cy="397.5" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<circle cx="918.0" cy="394.2" r="4.5" fill="#fcfcfb" stroke="#eb6834" stroke-width="2"/>
+<path d="M660.7,569.5 L676.8,572.2 L703.6,569.6 L730.4,567.4 L757.2,558.9 L784.0,553.6 L810.8,549.8 L837.6,545.8 L864.4,534.1 L891.2,400.8 L918.0,397.3" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="660.7" cy="569.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="676.8" cy="572.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="703.6" cy="569.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="730.4" cy="567.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="757.2" cy="558.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="784.0" cy="553.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="810.8" cy="549.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="837.6" cy="545.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="864.4" cy="534.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="891.2" cy="400.8" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="918.0" cy="397.3" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
 </g>
 <text x="20" y="349" font-size="11" fill="#52514e" text-anchor="middle" transform="rotate(-90 20 349)">latency, log scale</text>
 <text x="490" y="614" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>

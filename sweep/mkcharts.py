@@ -34,13 +34,25 @@ C1,C2,C3 = "#2a78d6","#eb6834","#1baf7a"
 C4,C5 = "#b5179e","#6d28d9"
 FONT = 'system-ui,-apple-system,"Segoe UI",sans-serif'
 
+def _isint(v):
+    try:
+        int(v)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 rows=[r for path in CSVS for r in csv.DictReader(open(path))]
 # A rate may appear more than once: repeats are how run-to-run spread gets
 # measured near the knee, where a single run says very little. Average them.
 _acc={}
 for r in rows:
+    # Numeric columns only. `product` was never one, and `fleet` (the
+    # hardware a row was measured on) is not either -- rows carry it so a
+    # CSV cannot be read without knowing what produced it. Anything that
+    # will not parse as an int is metadata, not a series.
     _acc.setdefault((r["product"], int(r["rate"])), []).append(
-        {k: int(v) for k, v in r.items() if k != "product"})
+        {k: int(v) for k, v in r.items() if k != "product" and _isint(v)})
 D={}
 for (prod, _rate), reps in _acc.items():
     D.setdefault(prod, []).append(
@@ -239,12 +251,12 @@ CFG={
  # apart, and shared axes are what makes that visible.
  "sequencer-output-brpc": (260000,50000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 150000,
-                     [(245000,"braft plateau",16)],
+                     [],
                      "sequencer-output-brpc — brpc Streaming RPC, sub-1ms to 150k",
                      "Five client boxes, one gateway, per-client topics: fan-out is one. No knee before consensus itself plateaus."),
  "sequencer-output-grpc": (260000,50000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 150000,
-                     [(245000,"braft plateau",16)],
+                     [],
                      "sequencer-output-grpc — real gRPC streaming, sub-1ms to 150k",
                      "The synchronous gRPC API's thread-per-Subscribe is the per-subscriber reader here."),
  # FIX carries no knee marker because the sweep never found one: it
@@ -259,21 +271,34 @@ CFG={
  # subscribers do not pay.
  "sequencer-fix": (260000,50000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 25000,
-                     [(245000,"braft plateau",16)],
+                     [],
                      "sequencer-fix - FIX 4.4 order entry, delivered from the journal",
                      "ONE gateway serving five sessions, doing both directions. Carries 250k at 2.3ms; sub-1ms only to 25k."),
  # The same gateway as sequencer-fix, answering from the propose
  # receipt instead of the journal (--inline_designated_outputs). Charted
  # as its own curve because it is a different round trip, not a tuning
  # of the same one.
+ # Bare braft, five clients, same fleet -- the consensus floor.
+ #
+ # NOT the gateways' ceiling, which is what it looks like until you
+ # notice the units differ: braft's client sends one raft op per
+ # request, while sequencer's input gateway batches whatever is queued
+ # into a single ProposeBatch. So the gateways carrying 250k client
+ # requests while this collapses at 225k ops is arithmetic, not a
+ # paradox, and the two curves must not be read as the same quantity.
+ "braft-multi": (260000,50000,(500,200000),
+                     [500,1000,2000,5000,10000,50000,200000], 125000,
+                     [(212000,"knee",16)],
+                     "braft-multi - bare braft, no sequencer, five client boxes",
+                     "One raft op per request, unbatched. Clean to 200k at 1.7ms; collapses by 225k."),
  "sequencer-fix-inline": (260000,50000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 75000,
-                     [(245000,"braft plateau",16)],
+                     [],
                      "sequencer-fix-inline - FIX 4.4, answered from the propose receipt",
                      "Faster to ~125k (1036us vs 1127us at 100k), slower above it: one send per reply, where the journal path coalesces."),
  "sequencer-output-websocket": (260000,50000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 150000,
-                     [(245000,"braft plateau",16)],
+                     [],
                      "sequencer-output-websocket — Boost.Beast WebSocket, sub-1ms to 150k",
                      "Each connection's stream is owned outright by its writer thread, not posted to a shared io thread."),
 }
@@ -342,7 +367,11 @@ RT = [("sequencer",                   "synchronous ack", C1),
       # guess. C1 is free whenever the ack path is not in the same CSV,
       # which is the case for the gateway-comparison sweep.
       ("sequencer-fix",               "FIX 4.4 (journal)", C1),
-      ("sequencer-fix-inline",        "FIX 4.4 (inline)",  C2)]
+      ("sequencer-fix-inline",        "FIX 4.4 (inline)",  C2),
+      # Muted, not a sixth categorical hue: this is the floor the others
+      # stand on, a reference rather than a peer. It also keeps the
+      # palette at the five slots that were checked all-pairs for CVD.
+      ("braft-multi",                 "braft (raw ops)",   INK2)]
 rt_present = [(n,lab,c) for n,lab,c in RT if n in D]
 if len(rt_present) >= 2:
     # Rows follow from how many round trips the CSVs actually carry.

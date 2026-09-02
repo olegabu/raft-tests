@@ -1,2 +1,12 @@
 product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet
 braft-multi,10000,9995,573,673,729,864,1986,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,25000,24990,529,572,625,776,1769,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,50000,49975,572,640,741,906,1659,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,75000,74965,611,716,861,984,1950,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,100000,99955,793,954,1094,1246,2558,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,125000,124943,932,1107,1263,1435,1816,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,150000,149931,1048,1242,1418,1682,3284,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,175000,174925,1185,1452,1846,2438,3722,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,200000,199914,1693,3266,5884,7944,8984,5,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,225000,220458,99648,105472,110272,113088,114880,99215,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+braft-multi,250000,224986,110848,115712,121856,126144,127168,677851,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge

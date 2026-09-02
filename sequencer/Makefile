@@ -799,9 +799,11 @@ charts: chart chart-relay
 ## One invocation with every gateway CSV, because round-trips.svg and
 ## round-trips-p50.svg only exist when mkcharts.py sees them together.
 SWEEP_FIX_INLINE_CSV ?= fix-inline.csv
+## Bare braft on the same fleet, drawn as the floor beneath the gateways.
+BRAFT_FLOOR_CSV ?= ../braft/braft-multi-c7a.csv
 charts-gateways:
 	python3 ../sweep/mkcharts.py $(SWEEP_OUTPUT_CSV) $(SWEEP_FIX_CSV) \
-		$(SWEEP_FIX_INLINE_CSV) $(CHART_DIR)
+		$(SWEEP_FIX_INLINE_CSV) $(BRAFT_FLOOR_CSV) $(CHART_DIR)
 
 charts-all:
 	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(SWEEP_DIRECT_CSV) $(SWEEP_RELAY_CSV) \
