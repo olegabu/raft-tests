@@ -536,3 +536,37 @@ subtitle)`, read off the data by hand rather than fitted, the same way
 The combined `knee-curves.svg` (aeron/braft/openraft on one chart)
 stays scoped to those three; sequencer's own comparison is
 `round-trips.svg`.
+
+## The residual tail after the segment-rollover fix
+
+Taking segment creation and sealing off the apply thread removed the
+systematic stall: p99 fell 10-25x and p999 5-15x across every gateway
+flavour, and rig drops went to zero. What is left is a rare stall that
+lands in roughly one measurement window in four or five, and these are
+the things it is NOT, each tested rather than reasoned about:
+
+- **Not disk writeback.** Five 200k runs whose p999 spread 8,224 ->
+  30,320 us showed effectively identical dirty pages, pages under
+  writeback, and device io_ticks. The worst run had the LOWEST device
+  time. (`/proc/meminfo` + `/proc/diskstats` sampled twice a second on
+  the node, aligned to run windows.)
+- **Not accumulated journal state.** The full sweep's bad point was
+  200k, reached after eight prior rates. A fresh-journal ladder put the
+  spikes at 75k and 100k instead and ran 125k-200k clean. It moves.
+- **Not rate.** Same rate measures 3.6ms p99 standalone and 96ms inside
+  a ladder, and 75k measures 4ms in one sweep and 28ms in the next.
+- **Not raft_sync or snapshots.** The node uses raft_sync=false and 8MB
+  raft segments, identical to braft's own harness, and braft's snapshot
+  interval is left at its 3600s default.
+
+For scale, bare braft on the same fleet has p999 7,944us at 200k against
+sequencer's 8,224-30,320us, so the steady-state gap is small; it is the
+occasional 60-105ms window that stands out.
+
+The next step is not another black-box correlation. It is to have the
+apply thread record its own stalls -- a timestamp and duration whenever
+one exceeds a few milliseconds -- so the stall is located before
+anything is theorised about its cause. Three plausible mechanisms were
+proposed from reading code during this investigation (blocking socket
+writes, clock_gettime overhead, writeback) and measurement rejected all
+three; a fourth guess is not worth a fleet run.
