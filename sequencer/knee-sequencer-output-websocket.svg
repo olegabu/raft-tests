@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="820" height="440" viewBox="0 0 820 440" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="sequencer-output-websocket — Boost.Beast WebSocket, sub-1ms to 150k">
 <rect width="820" height="440" fill="#fcfcfb"/>
 <text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer-output-websocket — Boost.Beast WebSocket, sub-1ms to 150k</text>
-<text x="78" y="46" font-size="12" fill="#52514e">Each connection's stream is owned outright by its writer thread, not posted to a shared io thread.</text>
+<text x="78" y="46" font-size="12" fill="#52514e">Its own writer thread per connection. p90 diverges from the other two above 150k; p50 does not.</text>
 <text x="78" y="62" font-size="12" fill="#52514e">p50 and p99 latency, open loop. Hollow marker = the cluster fell behind the offered rate.</text>
 <rect x="78" y="86" width="358.8" height="280" fill="#f0efec"/>
 <text x="86" y="102" font-size="11" fill="#898781">comfort zone</text>
@@ -36,33 +36,33 @@
 <text x="389" y="410" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>
 <defs><clipPath id="plot"><rect x="72" y="80" width="634" height="292"/></clipPath></defs>
 <g clip-path="url(#plot)">
-<path d="M101.9,339.3 L137.8,339.7 L197.6,319.3 L257.4,315.8 L317.2,292.8 L377.0,259.3 L436.8,254.7 L496.7,257.5 L556.5,256.2 L616.3,250.3 L676.1,208.5" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="101.9" cy="339.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="137.8" cy="339.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="197.6" cy="319.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="257.4" cy="315.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="317.2" cy="292.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="377.0" cy="259.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="436.8" cy="254.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="496.7" cy="257.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="556.5" cy="256.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="616.3" cy="250.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="676.1" cy="208.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<path d="M101.9,350.5 L137.8,352.0 L197.6,349.2 L257.4,344.4 L317.2,341.6 L377.0,338.7 L436.8,335.2 L496.7,331.9 L556.5,329.1 L616.3,326.4 L676.1,324.2" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="101.9" cy="350.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="137.8" cy="352.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="197.6" cy="349.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="257.4" cy="344.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="317.2" cy="341.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="377.0" cy="338.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="436.8" cy="335.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M101.9,340.5 L137.8,341.4 L197.6,335.0 L257.4,322.6 L317.2,290.5 L377.0,263.4 L436.8,256.1 L496.7,258.7 L556.5,261.7 L616.3,263.9 L676.1,259.5" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="101.9" cy="340.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="137.8" cy="341.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="197.6" cy="335.0" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="257.4" cy="322.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="317.2" cy="290.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="377.0" cy="263.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="436.8" cy="256.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="496.7" cy="258.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="556.5" cy="261.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="616.3" cy="263.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="676.1" cy="259.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M101.9,351.8 L137.8,352.4 L197.6,349.3 L257.4,345.2 L317.2,341.3 L377.0,338.6 L436.8,335.3 L496.7,331.9 L556.5,328.0 L616.3,326.6 L676.1,325.8" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="101.9" cy="351.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="137.8" cy="352.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="197.6" cy="349.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="257.4" cy="345.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="317.2" cy="341.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="377.0" cy="338.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="436.8" cy="335.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="496.7" cy="331.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="556.5" cy="329.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="616.3" cy="326.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="676.1" cy="324.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="556.5" cy="328.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="616.3" cy="326.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="676.1" cy="325.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 </g>
-<text x="688.1" y="212.5" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
-<text x="688.1" y="328.2" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
+<text x="688.1" y="263.5" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
+<text x="688.1" y="329.8" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
 <circle cx="83" cy="424" r="4.5" fill="#2a78d6"/>
 <text x="94" y="428" font-size="11" fill="#52514e">p50</text>
 <circle cx="128.8" cy="424" r="4.5" fill="#eb6834"/>

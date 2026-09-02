@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="820" height="440" viewBox="0 0 820 440" font-family='system-ui,-apple-system,"Segoe UI",sans-serif' role="img" aria-label="sequencer-fix - FIX 4.4 order entry, delivered from the journal">
 <rect width="820" height="440" fill="#fcfcfb"/>
 <text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer-fix - FIX 4.4 order entry, delivered from the journal</text>
-<text x="78" y="46" font-size="12" fill="#52514e">ONE gateway serving five sessions, doing both directions. Carries 250k at 2.3ms; sub-1ms only to 25k.</text>
+<text x="78" y="46" font-size="12" fill="#52514e">ONE gateway, five sessions, both directions. Carries 250k at 2.4ms with zero drops; sub-1ms only to 25k.</text>
 <text x="78" y="62" font-size="12" fill="#52514e">p50 and p99 latency, open loop. Hollow marker = the cluster fell behind the offered rate.</text>
 <rect x="78" y="86" width="59.8" height="280" fill="#f0efec"/>
 <text x="86" y="102" font-size="11" fill="#898781">comfort zone</text>
@@ -36,33 +36,33 @@
 <text x="389" y="410" font-size="11" fill="#52514e" text-anchor="middle">offered rate (requests/sec)</text>
 <defs><clipPath id="plot"><rect x="72" y="80" width="634" height="292"/></clipPath></defs>
 <g clip-path="url(#plot)">
-<path d="M101.9,335.0 L137.8,313.2 L197.6,306.7 L257.4,308.3 L317.2,303.1 L377.0,294.8 L436.8,265.7 L496.7,267.7 L556.5,228.3 L616.3,184.2 L676.1,224.7" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="101.9" cy="335.0" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="137.8" cy="313.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="197.6" cy="306.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="257.4" cy="308.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="317.2" cy="303.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="377.0" cy="294.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="436.8" cy="265.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="496.7" cy="267.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="556.5" cy="228.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="616.3" cy="184.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="676.1" cy="224.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
-<path d="M101.9,347.1 L137.8,339.2 L197.6,333.3 L257.4,332.3 L317.2,329.1 L377.0,325.9 L436.8,320.7 L496.7,313.6 L556.5,306.4 L616.3,297.5 L676.1,291.2" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="101.9" cy="347.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="137.8" cy="339.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M101.9,336.7 L137.8,316.6 L197.6,308.9 L257.4,306.5 L317.2,303.9 L377.0,293.6 L436.8,286.6 L496.7,276.8 L556.5,265.4 L616.3,253.5 L676.1,245.3" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="101.9" cy="336.7" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="137.8" cy="316.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="197.6" cy="308.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="257.4" cy="306.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="317.2" cy="303.9" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="377.0" cy="293.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="436.8" cy="286.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="496.7" cy="276.8" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="556.5" cy="265.4" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="616.3" cy="253.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="676.1" cy="245.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M101.9,348.7 L137.8,339.6 L197.6,333.3 L257.4,331.9 L317.2,329.7 L377.0,325.8 L436.8,321.5 L496.7,313.9 L556.5,306.3 L616.3,298.4 L676.1,292.2" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="101.9" cy="348.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="137.8" cy="339.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="197.6" cy="333.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="257.4" cy="332.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="317.2" cy="329.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="377.0" cy="325.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="436.8" cy="320.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="496.7" cy="313.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="556.5" cy="306.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="616.3" cy="297.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="676.1" cy="291.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="257.4" cy="331.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="317.2" cy="329.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="377.0" cy="325.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="436.8" cy="321.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="496.7" cy="313.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="556.5" cy="306.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="616.3" cy="298.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="676.1" cy="292.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 </g>
-<text x="688.1" y="228.7" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
-<text x="688.1" y="295.2" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
+<text x="688.1" y="249.3" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
+<text x="688.1" y="296.2" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
 <circle cx="83" cy="424" r="4.5" fill="#2a78d6"/>
 <text x="94" y="428" font-size="11" fill="#52514e">p50</text>
 <circle cx="128.8" cy="424" r="4.5" fill="#eb6834"/>

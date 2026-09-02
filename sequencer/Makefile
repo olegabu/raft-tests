@@ -280,7 +280,7 @@ define start_node
 	ssh $(SSH_OPTS) $(SSH_USER)@$(1) \
 		"cd $(NODE_DIR) && { [ -f $(APP)_node.pid ] && kill -TERM \$$(cat $(APP)_node.pid) 2>/dev/null; :; }; \
 		 rm -f $(APP)_node.pid; sleep 1; \
-		 nohup ./$(APP)_node --group=$(GROUP) --peer=$(2):$(PORT):0 --peers='$(PEERS)' \
+		 nohup env $(NODE_ENV) ./$(APP)_node --group=$(GROUP) --peer=$(2):$(PORT):0 --peers='$(PEERS)' \
 			--election_timeout_ms=$(ELECTION_TIMEOUT_MS) --data_dir=$(NODE_DIR)/data \
 			--raft_sync=$(SYNC) --event_dispatcher_num=$(EVENT_DISPATCHERS) \
 			--bthread_concurrency=$(SERVER_CONCURRENCY) \
@@ -319,7 +319,7 @@ ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) \
 		"cd $(NODE_DIR) && { [ -f $(APP)_output_gateway.pid ] && kill -TERM \$$(cat $(APP)_output_gateway.pid) 2>/dev/null; :; }; \
 		 rm -f $(APP)_output_gateway.pid; sleep 1; \
-		 nohup ./$(OUTPUT_GATEWAY_BIN) --data_dir=$(NODE_DIR)/data \
+		 nohup env $(OUTPUT_ENV) ./$(OUTPUT_GATEWAY_BIN) --data_dir=$(NODE_DIR)/data \
 			--resume_file=$(NODE_DIR)/output_resume_all \
 			--brpc_port=$(OUTPUT_BRPC_PORT) --grpc_port=$(OUTPUT_GRPC_PORT) \
 			--websocket_port=$(OUTPUT_WEBSOCKET_PORT) $(OUTPUT_TUNING_FLAGS) \
@@ -714,6 +714,25 @@ SWEEP_RELAY_CSV ?= seq-relay.csv
 ## the default pair reserves 256 GiB (1,048,576 x 262,144). Raising the
 ## record count 16x on its own asks for a 4.4 PB sparse file, which is
 ## past ext4's 16 TB per-file limit and simply fails to start.
+## Report any apply-thread step whose phases, or whose gap since the
+## previous record, exceed this many microseconds. Off unless set, and
+## off costs nothing -- no clock is read. Set it to chase a tail:
+##   make start-multi APPLY_STALL_US=5000
+## then read [apply-stall] lines from the node's std.log. A large `gap`
+## with small phases means the stall was upstream of the apply thread.
+APPLY_STALL_US ?=
+NODE_ENV = $(if $(APPLY_STALL_US),SEQ_APPLY_STALL_US=$(APPLY_STALL_US),)
+
+## Report any journal segment open slower than this from whichever
+## process TAILS the journal -- the output gateway, which opens and maps
+## each new segment on the very thread that delivers records.
+SEGMENT_OPEN_US ?=
+## Report a record that took too long from committed-in-the-journal to
+## published-on-the-ring, or too long a gap since the previous one.
+TAIL_STALL_US ?=
+OUTPUT_ENV = $(if $(SEGMENT_OPEN_US),SEQ_SEGMENT_OPEN_US=$(SEGMENT_OPEN_US),) \
+	$(if $(TAIL_STALL_US),SEQ_TAIL_STALL_US=$(TAIL_STALL_US),)
+
 JOURNAL_RECORDS_PER_SEGMENT ?=
 JOURNAL_MAX_RECORD_BYTES ?=
 JOURNAL_GEOMETRY_FLAGS = \

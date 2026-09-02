@@ -253,12 +253,12 @@ CFG={
                      [500,1000,2000,5000,10000,50000,200000], 150000,
                      [],
                      "sequencer-output-brpc — brpc Streaming RPC, sub-1ms to 150k",
-                     "Five client boxes, one gateway, per-client topics: fan-out is one. No knee before consensus itself plateaus."),
+                     "Five client boxes, one gateway, per-client topics. Zero drops to 250k; p99 rises 864us to 3668us, monotone."),
  "sequencer-output-grpc": (260000,50000,(500,200000),
-                     [500,1000,2000,5000,10000,50000,200000], 150000,
+                     [500,1000,2000,5000,10000,50000,200000], 175000,
                      [],
-                     "sequencer-output-grpc — real gRPC streaming, sub-1ms to 150k",
-                     "The synchronous gRPC API's thread-per-Subscribe is the per-subscriber reader here."),
+                     "sequencer-output-grpc — real gRPC streaming, sub-1ms to 175k",
+                     "Zero drops to 250k. p99 3966us at the top of the ladder, and the curve is monotone throughout."),
  # FIX carries no knee marker because the sweep never found one: it
  # absorbed every rate to 250k (248,959 of 250,000, p50 1949us) with the
  # rig's own schedule lag still at 1us. Drawing a dashed "knee" here
@@ -273,7 +273,7 @@ CFG={
                      [500,1000,2000,5000,10000,50000,200000], 25000,
                      [],
                      "sequencer-fix - FIX 4.4 order entry, delivered from the journal",
-                     "ONE gateway serving five sessions, doing both directions. Carries 250k at 2.3ms; sub-1ms only to 25k."),
+                     "ONE gateway, five sessions, both directions. Carries 250k at 2.4ms with zero drops; sub-1ms only to 25k."),
  # The same gateway as sequencer-fix, answering from the propose
  # receipt instead of the journal (--inline_designated_outputs). Charted
  # as its own curve because it is a different round trip, not a tuning
@@ -295,12 +295,12 @@ CFG={
                      [500,1000,2000,5000,10000,50000,200000], 75000,
                      [],
                      "sequencer-fix-inline - FIX 4.4, answered from the propose receipt",
-                     "Faster to ~125k (1036us vs 1127us at 100k), slower above it: one send per reply, where the journal path coalesces."),
+                     "Faster below ~100k, slower above: one send per reply, where the journal path coalesces whatever the ring drained."),
  "sequencer-output-websocket": (260000,50000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 150000,
                      [],
                      "sequencer-output-websocket — Boost.Beast WebSocket, sub-1ms to 150k",
-                     "Each connection's stream is owned outright by its writer thread, not posted to a shared io thread."),
+                     "Its own writer thread per connection. p90 diverges from the other two above 150k; p50 does not."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:
