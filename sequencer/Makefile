@@ -121,6 +121,44 @@ QUICKFIX_CLIENT_COMP_IDS = $(subst $(SPACE),$(COMMA),$(foreach c,$(shell seq 0 $
 ##   make start-fix FIX_STAGE_TIMERS=1
 FIX_ENV := $(if $(FIX_STAGE_TIMERS),FIX_STAGE_TIMERS=$(FIX_STAGE_TIMERS),)
 
+## QUICKFIX_SOCKET_NODELAY=1 turns TCP_NODELAY on for the QuickFIX
+## gateway. Off by default and deliberately so -- QuickFIX writes one
+## message per socket write, so un-Nagling multiplies its packet rate
+## instead of removing a stall; see the long comment in
+## gateway/quickfix/input/src/quickfix_input_transport.cpp. The flag
+## exists so that trade can be RE-MEASURED on current code rather than
+## trusted from a comment.
+## Raise the open-file soft limit before exec'ing anything that reads
+## or writes a log.
+##
+## braft keeps ONE OPEN FD PER LOG SEGMENT, and with its snapshot
+## interval left at the 3600s default (deliberately -- it matches
+## braft's own harness, see sequencer/README.md) the log never
+## truncates during a sweep. A long ladder therefore accumulates
+## segments until the process runs out of descriptors:
+##
+##   E log.cpp:1203] Fail to close old open_segment or create new
+##     open_segment path: /data/counter/data/log: Too many open files [24]
+##   E raft error: {type=LogError, error_code=5, error_text=`Fail to
+##     append entries'}
+##   W node ... is not in active state current_term 2 state ERROR
+##
+## braft LATCHES the node into ERROR at that point -- it does not
+## recover -- so every rate measured after it silently returns zero
+## completions. That is what truncated the combined output sweep: the
+## node died 1008 log segments in, during brpc's post-knee rates, and
+## all seventeen WebSocket rates afterwards recorded nothing. It is
+## also the most likely explanation for the older seam in
+## seq-output-multi.csv, where brpc and gRPC came from one cluster
+## lifetime and WebSocket from another.
+##
+## The soft limit was the default 1024 against a hard limit of
+## 1048576, so this needs no privilege -- just asking.
+ULIMIT_FDS := ulimit -n 65536;
+
+QUICKFIX_SOCKET_NODELAY ?=
+QUICKFIX_ENV := $(if $(QUICKFIX_SOCKET_NODELAY),QUICKFIX_SOCKET_NODELAY=$(QUICKFIX_SOCKET_NODELAY),)
+
 ## Answer from the propose receipt instead of the journal (see the
 ## gateway's --inline_designated_outputs). Default false = §8.11.
 FIX_INLINE ?= false
@@ -265,6 +303,17 @@ push:
 		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_fix_gateway \
 			$(SSH_USER)@$$h:$(NODE_DIR)/ ; \
 	done
+	# The QuickFIX gateway travels with the hffix one, to every node,
+	# for the same reason. Only start-quickfix used to push it, so a
+	# plain `make push` left whatever binary the last sweep happened to
+	# leave behind -- on NODE1 a stale one, on NODE2/NODE3 none at all.
+	# A stale remote binary is the single most expensive mistake
+	# available here: it produces real-looking numbers for code that is
+	# not the code under test.
+	for h in $(NODE1) $(NODE2) $(NODE3); do \
+		scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_quickfix_gateway \
+			$(SSH_USER)@$$h:$(NODE_DIR)/ ; \
+	done
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) "mkdir -p $(CLIENT_DIR)"
 	scp $(SSH_OPTS) $(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_input_gateway \
 		$(SEQUENCER_DIR)/build/release/examples/$(APP)/$(APP)_load_generator \
@@ -297,7 +346,7 @@ define start_node
 	ssh $(SSH_OPTS) $(SSH_USER)@$(1) \
 		"cd $(NODE_DIR) && { [ -f $(APP)_node.pid ] && kill -TERM \$$(cat $(APP)_node.pid) 2>/dev/null; :; }; \
 		 rm -f $(APP)_node.pid; sleep 1; \
-		 nohup env $(NODE_ENV) ./$(APP)_node --group=$(GROUP) --peer=$(2):$(PORT):0 --peers='$(PEERS)' \
+		 $(ULIMIT_FDS) nohup env $(NODE_ENV) ./$(APP)_node --group=$(GROUP) --peer=$(2):$(PORT):0 --peers='$(PEERS)' \
 			--election_timeout_ms=$(ELECTION_TIMEOUT_MS) --data_dir=$(NODE_DIR)/data \
 			--raft_sync=$(SYNC) --event_dispatcher_num=$(EVENT_DISPATCHERS) \
 			--bthread_concurrency=$(SERVER_CONCURRENCY) \
@@ -322,13 +371,13 @@ start:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) \
 		"cd $(NODE_DIR) && { [ -f sequencer_relay.pid ] && kill -TERM \$$(cat sequencer_relay.pid) 2>/dev/null; :; }; \
 		 rm -f sequencer_relay.pid; sleep 1; \
-		 nohup ./sequencer_relay --data_dir=$(NODE_DIR)/data --listen_port=$(RELAY_LISTEN_PORT) \
+		 $(ULIMIT_FDS) nohup ./sequencer_relay --data_dir=$(NODE_DIR)/data --listen_port=$(RELAY_LISTEN_PORT) \
 			--grpc_listen_port=$(RELAY_GRPC_PORT) $(RELAY_MAX_BATCH_FLAG) $(RELAY_IDLE_SPIN_FLAG) --logtostderr --logbufsecs=0 \
 			> $(NODE_DIR)/relay.log 2>&1 < /dev/null & echo \$$! > sequencer_relay.pid"
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
 		"cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }; \
 		 rm -f $(APP)_input_gateway.pid; sleep 1; \
-		 nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
+		 $(ULIMIT_FDS) nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
 			--listen_port=$(INPUT_GATEWAY_PORT) $(INPUT_GATEWAY_CONCURRENCY_FLAG) $(INPUT_BATCH_FLAGS) $(INPUT_GATEWAY_EXTRA) \
 			--logtostderr --logbufsecs=0 \
 			> std.log 2>&1 < /dev/null & echo \$$! > $(APP)_input_gateway.pid"
@@ -336,7 +385,7 @@ ifneq ($(OUTPUT_GATEWAY_FLAVOR),)
 	ssh $(SSH_OPTS) $(SSH_USER)@$(NODE1) \
 		"cd $(NODE_DIR) && { [ -f $(APP)_output_gateway.pid ] && kill -TERM \$$(cat $(APP)_output_gateway.pid) 2>/dev/null; :; }; \
 		 rm -f $(APP)_output_gateway.pid; sleep 1; \
-		 nohup env $(OUTPUT_ENV) ./$(OUTPUT_GATEWAY_BIN) --data_dir=$(NODE_DIR)/data \
+		 $(ULIMIT_FDS) nohup env $(OUTPUT_ENV) ./$(OUTPUT_GATEWAY_BIN) --data_dir=$(NODE_DIR)/data \
 			--resume_file=$(NODE_DIR)/output_resume_all \
 			--brpc_port=$(OUTPUT_BRPC_PORT) --grpc_port=$(OUTPUT_GRPC_PORT) \
 			--websocket_port=$(OUTPUT_WEBSOCKET_PORT) $(OUTPUT_TUNING_FLAGS) \
@@ -380,7 +429,7 @@ start-quickfix-on:
 		"cd $(NODE_DIR) && for i in \$$(seq 0 \$$(( $(FIX_GATEWAYS) - 1 ))); do \
 		   p=\$$(( $(FIX_PORT) + \$$i )); \
 		   rm -rf qfix_resume_\$$i qfix_seq_\$$i; \
-		   nohup ./$(QUICKFIX_GATEWAY_BIN) --node_peers=$(NODE1_PRIV):$(PORT) \
+		   $(ULIMIT_FDS) nohup env $(QUICKFIX_ENV) ./$(QUICKFIX_GATEWAY_BIN) --node_peers=$(NODE1_PRIV):$(PORT) \
 			--listen_port=\$$p --data_dir=$(NODE_DIR)/data \
 			--resume_file=$(NODE_DIR)/qfix_resume_\$$i \
 			--sequence_store_dir=$(NODE_DIR)/qfix_seq_\$$i \
@@ -421,7 +470,7 @@ start-fix-on:
 		"cd $(NODE_DIR) && for i in \$$(seq 0 \$$(( $(FIX_GATEWAYS) - 1 ))); do \
 		   p=\$$(( $(FIX_PORT) + \$$i )); \
 		   rm -rf fix_resume_\$$i fix_seq_\$$i; \
-		   nohup env $(FIX_ENV) ./$(FIX_GATEWAY_BIN) --node_peers=$(NODE1_PRIV):$(PORT) \
+		   $(ULIMIT_FDS) nohup env $(FIX_ENV) ./$(FIX_GATEWAY_BIN) --node_peers=$(NODE1_PRIV):$(PORT) \
 			--inline_designated_outputs=$(FIX_INLINE) \
 			--listen_port=\$$p --data_dir=$(NODE_DIR)/data \
 			--resume_file=$(NODE_DIR)/fix_resume_\$$i \
@@ -593,7 +642,7 @@ start-multi: start
 		ssh $(SSH_OPTS) $(SSH_USER)@$$h \
 			"cd $(CLIENT_DIR) && { [ -f $(APP)_input_gateway.pid ] && kill -TERM \$$(cat $(APP)_input_gateway.pid) 2>/dev/null; :; }; \
 			 rm -f $(APP)_input_gateway.pid; sleep 1; \
-			 nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
+			 $(ULIMIT_FDS) nohup ./$(APP)_input_gateway --node_peers='$(NODE1_PRIV):$(PORT),$(NODE2_PRIV):$(PORT),$(NODE3_PRIV):$(PORT)' \
 				--listen_port=$(INPUT_GATEWAY_PORT) $(INPUT_GATEWAY_CONCURRENCY_FLAG) $(INPUT_BATCH_FLAGS) $(INPUT_GATEWAY_EXTRA) \
 				--logtostderr --logbufsecs=0 \
 				> std.log 2>&1 < /dev/null & echo \$$! > $(APP)_input_gateway.pid" ; \
