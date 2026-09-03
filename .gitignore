@@ -6,3 +6,5 @@
 *.tfstate.*
 target/
 .gradle/
+__pycache__/
+*.pyc
