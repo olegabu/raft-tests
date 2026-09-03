@@ -32,6 +32,10 @@ C1,C2,C3 = "#2a78d6","#eb6834","#1baf7a"
 # concern) and the violet/blue at ΔE 4.8 deutan. These two clear all
 # pairs in all three CVD models.
 C4,C5 = "#b5179e","#6d28d9"
+# A sixth categorical slot, for the seven-series round-trip overlay.
+# Checked all-pairs against C1-C5 and INK2: see the note at its use
+# below, and re-run validate_palette.py after touching any of these.
+C6 = "#991b1b"
 FONT = 'system-ui,-apple-system,"Segoe UI",sans-serif'
 
 def _isint(v):
@@ -96,12 +100,50 @@ def series(o,pts,col,xm,ym,key):
         o.append(f'<circle cx="{xm(p["rate"]):.1f}" cy="{ym(p[key]):.1f}" r="4.5" '
                  f'fill="{SURF if sat(p) else col}" stroke="{col if sat(p) else SURF}" stroke-width="2"/>')
 
-def legend(o,L,H,items):
+# Width one legend entry occupies: marker, gap, label, trailing space.
+def _legend_w(lab): return 26+len(lab)*6.6
+
+# How many rows `items` needs inside `maxx`. Callers size the canvas
+# with this BEFORE drawing, because a legend that wraps needs the room
+# reserved, not discovered.
+def legend_rows(items,L,maxx):
+    rows,lx=1,L
+    for lab,_c in items:
+        w=_legend_w(lab)
+        if lx>L and lx+w>maxx:
+            rows+=1; lx=L
+        lx+=w
+    return rows
+
+def legend(o,L,H,items,maxx=None):
+    # Wraps. It used to lay every entry out on one row and run off the
+    # right edge once the overlay grew past five series -- the last two
+    # legend entries were simply not on the canvas, so two of the seven
+    # lines had no key at all. Nothing complained, because an SVG will
+    # happily place text outside its own viewBox.
+    rows=legend_rows(items,L,maxx) if maxx else 1
+    y=H-16-(rows-1)*18
     lx=L
     for lab,col in items:
-        o.append(f'<circle cx="{lx+5}" cy="{H-16}" r="4.5" fill="{col}"/>')
-        o.append(f'<text x="{lx+16}" y="{H-12}" font-size="11" fill="{INK2}">{lab}</text>')
-        lx+=26+len(lab)*6.6
+        w=_legend_w(lab)
+        if maxx and lx>L and lx+w>maxx:
+            y+=18; lx=L
+        o.append(f'<circle cx="{lx+5}" cy="{y}" r="4.5" fill="{col}"/>')
+        o.append(f'<text x="{lx+16}" y="{y+4}" font-size="11" fill="{INK2}">{lab}</text>')
+        lx+=w
+
+# Greedy wrap for a subtitle line, in characters. Subtitles are 12px in
+# a proportional face, so this is an estimate; the budget below is set
+# well inside the canvas rather than exactly against it.
+def wrap_sub(text,budget=118):
+    words,lines,cur=text.split(" "),[],""
+    for w in words:
+        if cur and len(cur)+1+len(w)>budget:
+            lines.append(cur); cur=w
+        else:
+            cur=cur+" "+w if cur else w
+    if cur: lines.append(cur)
+    return lines
 
 # ---------- combined ----------
 W,H,L,R,T,B=900,500,78,150,78,74
@@ -379,15 +421,42 @@ RT = [("sequencer",                   "synchronous ack", C1),
       # Muted, not a sixth categorical hue: this is the floor the others
       # stand on, a reference rather than a peer. It also keeps the
       # palette at the five slots that were checked all-pairs for CVD.
-      # NOT from the validated five. The palette's all-pairs CVD check
-      # covers C1-C5; this is a sixth categorical hue added because the
-      # overlay now carries seven series, and it has NOT been run
-      # through scripts/validate_palette.js (node is not available on
-      # the machine that drew this). Validate it before publishing the
-      # chart anywhere it matters, and re-step it if it fails.
-      ("sequencer-quickfix",          "FIX 4.4 (QuickFIX)", "#a16207"),
+      # C6, the sixth categorical hue, added because the overlay now
+      # carries seven series. Checked -- see validate_palette.py, which
+      # exists because this slot went in unchecked with a comment saying
+      # so, and the check found the guess was wrong.
+      #
+      # It was #a16207, an amber, which FAILED against C2's orange at
+      # normal-vision deltaE 14.4 (below the 15 floor) and 7.2 protan.
+      # That is the same trap the first attempt at C4/C5 fell into one
+      # comment above: with five hues already placed, the space left
+      # around orange is much narrower than it looks, and picking by eye
+      # lands in it twice out of two. Of 44 candidate steps across the
+      # hue circle, only THREE clear all six existing colours in all
+      # three CVD models; the other two are near-black browns that would
+      # read as a second grey beside the INK2 floor line at 2px, so the
+      # red is the one that is distinct as a HUE and not merely as a
+      # number. All 21 pairs pass.
+      ("sequencer-quickfix",          "FIX 4.4 (QuickFIX)", C6),
       ("braft-multi",                 "braft (raw ops)",   INK2)]
 rt_present = [(n,lab,c) for n,lab,c in RT if n in D]
+
+# Three colours above are deliberately used twice (C1, C2, C4), each
+# time with a comment arguing the two series never share a CSV. That
+# argument is correct today and is not enforced anywhere, so a future
+# sweep that puts both into one file would silently draw two series in
+# one colour -- a colour-identity error, and the kind that survives
+# review because the chart still looks fine. Check it instead of
+# arguing it.
+_by_colour = {}
+for _n, _lab, _c in rt_present:
+    _by_colour.setdefault(_c, []).append(_lab)
+_clashes = {c: labs for c, labs in _by_colour.items() if len(labs) > 1}
+if _clashes:
+    raise SystemExit(
+        "palette clash: these series would be drawn in one colour -- "
+        + "; ".join(f"{c}: {', '.join(labs)}" for c, labs in _clashes.items())
+        + "\nGive one of them a new hue and re-run validate_palette.py.")
 if len(rt_present) >= 2:
     # Rows follow from how many round trips the CSVs actually carry.
     # This was 3x2 for the six the repo had; a seventh (FIX) would have
@@ -471,8 +540,16 @@ if len(rt_present) >= 2:
     open(f"{OUT}/round-trips.svg","w").write("\n".join(o))
 
     # ---------- the same five, p50 only, overlaid ----------
-    W,H,L,R,T,B = 900,470,78,40,96,74
-    PW,PH = W-L-R,H-T-B
+    # Canvas sized to the CONTENT, not fixed: this chart carries one
+    # subtitle line per series and one legend entry per series, and at
+    # seven series both ran off the right edge of a fixed 900x470 --
+    # the "At 100k:" line was 187 characters in an 822px space, and the
+    # last two legend keys were drawn outside the viewBox entirely.
+    # Whatever the next sweep adds, the canvas now grows to hold it.
+    W,L,R,B = 900,78,40,74
+    _legend_items = [(lab,col) for _n,lab,col in rt_present]
+    _rows = legend_rows(_legend_items,L,W-20)
+    B += (_rows-1)*18
     # Same reason as the panels above: this axis was pinned at 130k, so
     # every curve stopped exactly where the comparison gets interesting.
     XMAX = int(math.ceil(_maxrate / 25000.0) * 25000)
@@ -489,13 +566,25 @@ if len(rt_present) >= 2:
             _at100k.append(f"{_lab} {_pt['p50']:,} µs")
     _sub = ("At 100k: " + "; ".join(_at100k) + "." if _at100k
             else "No 100k point in this dataset.")
-    o = head(W,H,"sequencer: gateway round trips, p50 vs offered rate",
-      ["p50 latency vs offered rate, same fleet and sweep as the panels above. Log latency scale.",
-       _sub,
-       "Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms."])
+    _sublines = (["p50 latency vs offered rate, same fleet and sweep as the panels above. "
+                  "Log latency scale."]
+                 + wrap_sub(_sub)
+                 + ["Hollow marker = the cluster fell behind the offered rate. "
+                    "Shaded band = at or below 1 ms."])
+    # Top margin follows the subtitle's true height: head() puts the
+    # first line at y=46 and steps 16px, and the plot starts 18px under
+    # the last one.
+    T = 46+16*len(_sublines)+2
+    H = T+(470-96-74)+B
+    PW,PH = W-L-R,H-T-B
+    o = head(W,H,"sequencer: gateway round trips, p50 vs offered rate",_sublines)
     y1ms = ym(1000)
     o.append(f'<rect x="{L}" y="{y1ms:.1f}" width="{PW}" height="{T+PH-y1ms:.1f}" fill="{BAND}"/>')
-    o.append(f'<text x="{L+8}" y="{y1ms+15:.1f}" font-size="11" fill="{MUTED}">at or below 1 ms</text>')
+    # Right-aligned inside the band, not left: at the left edge every
+    # series is still sub-millisecond and draws straight through the
+    # label. Past the knees the band's right end is empty.
+    o.append(f'<text x="{L+PW-8}" y="{y1ms+15:.1f}" font-size="11" fill="{MUTED}" '
+             f'text-anchor="end">at or below 1 ms</text>')
     axes(o,L,T,PW,PH,XMAX,XSTEP,[1000,2000,5000,10000,50000,200000],"p50 latency, log scale",ym,
          lambda v: f"{v//1000} ms" if v>=1000 else f"{v} µs")
     # Legend only, no direct line-end labels: every series collapses
@@ -507,7 +596,7 @@ if len(rt_present) >= 2:
         pts=[p for p in D[name] if p["p50"]>0]
         if not pts: continue
         series(o,pts,col,xm,ym,"p50")
-    legend(o,L,H,[(lab,col) for _n,lab,col in rt_present])
+    legend(o,L,H,_legend_items,W-20)
     o.append('</svg>')
     open(f"{OUT}/round-trips-p50.svg","w").write("\n".join(o))
 
