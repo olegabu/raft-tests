@@ -285,7 +285,7 @@ CFG={
                      [500,1000,2000,5000,10000,50000,200000], 100000,
                      [(162000,"knee",16)],
                      "sequencer-quickfix - FIX 4.4 on QuickFIX's session layer",
-                     "Carries 150k at 1657us, collapses by 175k, plateaus near 158k -- against 400k on the hffix arm."),
+                     "Carries 125k at 1127us, collapses by 175k, plateaus near 158k -- against 250k+ on the hffix arm."),
  # Bare braft, five clients, same fleet -- the consensus floor.
  #
  # NOT the gateways' ceiling, which is what it looks like until you
@@ -308,7 +308,7 @@ CFG={
                      [500,1000,2000,5000,10000,50000,200000], 150000,
                      [(312000,"knee",16)],
                      "sequencer-output-websocket — Boost.Beast WebSocket, clean to 300k",
-                     "Its own writer thread per connection: p90 leaves the other two above 150k while p50 does not. Same 300k ceiling."),
+                     "Nagle off (Beast does not set it; brpc and gRPC do). The p90 that used to leave the other two above 150k was that, not the writer thread."),
 }
 for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     if name not in D:
