@@ -537,36 +537,76 @@ The combined `knee-curves.svg` (aeron/braft/openraft on one chart)
 stays scoped to those three; sequencer's own comparison is
 `round-trips.svg`.
 
-## The residual tail after the segment-rollover fix
+## The residual tail, located
 
 Taking segment creation and sealing off the apply thread removed the
-systematic stall: p99 fell 10-25x and p999 5-15x across every gateway
-flavour, and rig drops went to zero. What is left is a rare stall that
-lands in roughly one measurement window in four or five, and these are
-the things it is NOT, each tested rather than reasoned about:
+systematic stall, and moving the resume-position write off the delivery
+thread removed most of what was left. Five 200k runs, before and after:
 
-- **Not disk writeback.** Five 200k runs whose p999 spread 8,224 ->
-  30,320 us showed effectively identical dirty pages, pages under
-  writeback, and device io_ticks. The worst run had the LOWEST device
-  time. (`/proc/meminfo` + `/proc/diskstats` sampled twice a second on
-  the node, aligned to run windows.)
-- **Not accumulated journal state.** The full sweep's bad point was
-  200k, reached after eight prior rates. A fresh-journal ladder put the
-  spikes at 75k and 100k instead and ran 125k-200k clean. It moves.
-- **Not rate.** Same rate measures 3.6ms p99 standalone and 96ms inside
-  a ladder, and 75k measures 4ms in one sweep and 28ms in the next.
-- **Not raft_sync or snapshots.** The node uses raft_sync=false and 8MB
-  raft segments, identical to braft's own harness, and braft's snapshot
-  interval is left at its 3600s default.
+| | p999 across five 200k runs | worst max |
+|---|---|---|
+| before | 8,224 - 30,320 us, plus occasional 60-105 ms windows | ~105 ms |
+| after | 3,932 - 4,640 us | 10.7 ms |
 
-For scale, bare braft on the same fleet has p999 7,944us at 200k against
-sequencer's 8,224-30,320us, so the steady-state gap is small; it is the
-occasional 60-105ms window that stands out.
+The spread is 7.7x tighter and no 60-105 ms window appeared.
 
-The next step is not another black-box correlation. It is to have the
-apply thread record its own stalls -- a timestamp and duration whenever
-one exceeds a few milliseconds -- so the stall is located before
-anything is theorised about its cause. Three plausible mechanisms were
-proposed from reading code during this investigation (blocking socket
-writes, clock_gettime overhead, writeback) and measurement rejected all
-three; a fourth guess is not worth a fleet run.
+**Where the rest of it is.** The apply loop reports its own stalls by
+phase (`SEQ_APPLY_STALL_US`), and with the probe armed -- verified in
+`/proc/<pid>/environ`, not assumed -- a probed ladder to 325k caught
+in-window stalls that all look like this:
+
+```
+[apply-stall] gap=10371us sm=0us journal=0us notify=10us total=10us
+[apply-stall] gap= 7494us sm=0us journal=0us notify= 9us total= 9us
+[apply-stall] gap= 6745us sm=0us journal=0us notify= 4us total= 4us
+```
+
+A 5-10 ms gap with every phase at 0-10 us means the apply loop was
+**idle**: nothing was waiting for it. The state machine, the journal
+append and the completion callback together account for under 10 us,
+so the wait is upstream of all of them -- in braft's replication path,
+not in anything this repository owns. `journal=0us` is also the
+segment-rollover fix showing up directly.
+
+That is the answer to "what is the remaining tail": it is consensus,
+measured rather than argued. Note also that the probe proved itself
+non-vacuous in the same run -- the largest gaps it logged were the ~30 s
+idle pauses BETWEEN measurement runs, which is exactly what an armed
+instrument should report and what a silent one could not.
+
+For scale, bare braft on the same fleet has p999 7,944us at 200k. Our
+own 200k p999 is now 4,372 us (gRPC) to 5,908 us (brpc), but the two
+are not measuring the same thing -- braft's harness times raw ops and
+ours times submission to journal-observed delivery -- so treat that as
+an order-of-magnitude check, not a ranking.
+
+What is still not explained is a rare LARGER window: WebSocket at 200k
+in the full sweep showed p999 32,352 us with a 53 ms max, in one rate
+of fifty-one. Five probed 200k repeats and a probed eight-rate ladder
+did not reproduce one, so it remains uncaught rather than understood.
+Catching it needs a long probed run, not another hypothesis.
+
+## Sweeps die of open file descriptors, silently
+
+Worth knowing before trusting any long ladder. braft keeps one open fd
+per raft log segment and truncates only on snapshot, so a sweep
+accumulates them until the process hits its limit:
+
+```
+E log.cpp:1203] Fail to close old open_segment or create new
+  open_segment path: .../log: Too many open files [24]
+W node ... is not in active state current_term 2 state ERROR
+```
+
+**braft latches the node into ERROR and does not recover.** The process
+keeps running and listening while every proposal fails, so the sweep
+carries on and writes rows full of zeros. Nothing fails loudly.
+
+This is what produced the seam in `seq-output-multi.csv`, where brpc
+and gRPC came from one cluster lifetime and WebSocket from another: a
+combined run reached 1008 segments during brpc's post-knee rates and
+every one of the seventeen WebSocket rates afterwards recorded nothing.
+The Makefile now raises the soft limit to 65536 at every launch site
+(the hard limit was already ~1M, so it needs no privilege). The sweep
+that produced the current CSV ended at 1569 segments -- past the old
+1024 ceiling, so the fix is load-bearing, not precautionary.
