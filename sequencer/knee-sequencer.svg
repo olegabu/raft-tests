@@ -71,8 +71,8 @@
 <circle cx="608.5" cy="137.7" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
 <circle cx="663.4" cy="97.1" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
 </g>
-<text x="675.4" y="90.0" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
-<text x="675.4" y="101.1" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
+<text x="675.4" y="88.6" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
+<text x="675.4" y="102.6" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
 <circle cx="83" cy="424" r="4.5" fill="#2a78d6"/>
 <text x="94" y="428" font-size="11" fill="#52514e">p50</text>
 <circle cx="128.8" cy="424" r="4.5" fill="#eb6834"/>

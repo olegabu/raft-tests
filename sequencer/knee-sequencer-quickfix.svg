@@ -63,8 +63,8 @@
 <circle cx="347.1" cy="103.4" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
 <circle cx="377.0" cy="96.7" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
 </g>
-<text x="389.0" y="97.7" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
-<text x="389.0" y="100.7" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
+<text x="389.0" y="92.2" font-size="12" font-weight="600" fill="#0b0b0b">p99</text>
+<text x="389.0" y="106.2" font-size="12" font-weight="600" fill="#0b0b0b">p50</text>
 <circle cx="83" cy="424" r="4.5" fill="#2a78d6"/>
 <text x="94" y="428" font-size="11" fill="#52514e">p50</text>
 <circle cx="128.8" cy="424" r="4.5" fill="#eb6834"/>

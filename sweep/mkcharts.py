@@ -386,10 +386,29 @@ for name,(xmax,xstep,yrange,yticks,comfort,markers,title,line2) in CFG.items():
     for key,col in (("p99",C2),("p50",C1)):
         series(o,D[name],col,xm,ym,key)
     o.append('</g>')
+    # Direct end-labels, pushed apart when the two series finish close
+    # together.
+    #
+    # Past the knee p50 and p99 converge -- everything is queueing, so
+    # the median and the tail meet -- and these two labels then land on
+    # top of each other. Measured across the nine per-product charts:
+    # seven had less than 13px between them at font-size 12, and three
+    # (fix, quickfix, braft) were under 4.4px, which is not a near-miss
+    # but one label drawn over the other. The chart still looked fine
+    # in a thumbnail, which is why it survived.
+    last = D[name][-1]
+    kMinLabelGap = 14.0
+    pos = {k: min(max(ym(last[k]), T), T + PH) for k in ("p99", "p50")}
+    if abs(pos["p99"] - pos["p50"]) < kMinLabelGap:
+        # Separate symmetrically about the midpoint, keeping whichever
+        # series is actually higher on top so the labels do not lie
+        # about which curve is which.
+        mid = (pos["p99"] + pos["p50"]) / 2.0
+        hi, lo = ("p99", "p50") if pos["p99"] <= pos["p50"] else ("p50", "p99")
+        pos[hi] = mid - kMinLabelGap / 2.0
+        pos[lo] = mid + kMinLabelGap / 2.0
     for key,col in (("p99",C2),("p50",C1)):
-        last=D[name][-1]
-        ylab_pos=min(max(ym(last[key]), T), T+PH)
-        o.append(f'<text x="{xm(last["rate"])+12:.1f}" y="{ylab_pos+4:.1f}" font-size="12" '
+        o.append(f'<text x="{xm(last["rate"])+12:.1f}" y="{pos[key]+4:.1f}" font-size="12" '
                  f'font-weight="600" fill="{INK}">{key}</text>')
     legend(o,L,H,[("p50",C1),("p99",C2)])
     o.append('</svg>')
