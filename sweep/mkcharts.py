@@ -326,6 +326,23 @@ CFG={
  # output reaches a FIX client by the journal (specification.md 8.11),
  # so the median carries a commit-then-read cycle the output gateways'
  # subscribers do not pay.
+ # The exchange application (github.com/olegabu/exchange) over the same
+ # FIX-journal path as sequencer-fix, so the two are directly
+ # comparable: identical gateway, identical delivery, and the whole
+ # difference is a matching engine on the apply thread instead of an
+ # eight-byte counter. sequencer-fix's 400k is the reference this is
+ # measured against.
+ #
+ # PROVISIONAL. The axes below are a rendering choice, not a claim: the
+ # x range is set to sequencer-fix's ladder so the two charts line up,
+ # and there is deliberately NO knee annotation and no prose about
+ # where it turns, because no sweep has been run yet. Fill both in from
+ # the first sweep and rewrite this comment.
+ "exchange-fix": (520000,100000,(500,200000),
+                     [500,1000,2000,5000,10000,50000,200000], 25000,
+                     [],
+                     "exchange-fix - a CLOB on sequencer, over FIX 4.4",
+                     "Provisional axes; no sweep run yet. Compare against sequencer-fix, which is the same path without matching."),
  "sequencer-fix": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 25000,
                      [(450000,"knee",16)],
