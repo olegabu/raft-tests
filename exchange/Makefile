@@ -82,9 +82,28 @@ MAX_QTY  ?= 1000
 # consecutive ports; clients round-robin across all of them.
 FIX_PORT     ?= 8700
 FIX_GATEWAYS ?= 1
-FIX_NODES        ?= $(NODE1_PRIV) $(NODE2_PRIV) $(NODE3_PRIV)
-FIX_NODES_PUBLIC ?= $(NODE1) $(NODE2) $(NODE3)
+# ONE gateway on NODE1 by default, which is the shape sequencer-fix was
+# measured in (its 400k is "one gateway, five sessions"). That is the
+# reference this product is compared against, and the comparison only
+# means anything if the gateway tier is identical -- the whole intended
+# difference between the two curves is a matching engine on the apply
+# thread. Fanning out to a gateway per node is a separate experiment:
+#   make start-fix FIX_NODES="$(NODE1_PRIV) $(NODE2_PRIV) $(NODE3_PRIV)" \
+#                  FIX_NODES_PUBLIC="$(NODE1) $(NODE2) $(NODE3)"
+FIX_NODES        ?= $(NODE1_PRIV)
+FIX_NODES_PUBLIC ?= $(NODE1)
 FIX_ENV ?=
+
+# sequencer's own apply-loop instrument, off unless set (setting it
+# costs a clock read per input, so it is never on for a published
+# number). Logs a breakdown for every input whose apply cycle exceeded
+# this many microseconds: gap= time waiting for the next committed
+# entry, sm= the state machine, journal= the append, notify= the
+# acknowledgement. It is what distinguishes "the exchange is the
+# bottleneck" from "the exchange is waiting on braft".
+#   make start APPLY_STALL_US=1000
+APPLY_STALL_US ?=
+NODE_ENV = $(if $(APPLY_STALL_US),SEQ_APPLY_STALL_US=$(APPLY_STALL_US),)
 
 COMMA := ,
 EMPTY :=
@@ -156,7 +175,7 @@ define start_node
 	ssh $(SSH_OPTS) $(SSH_USER)@$(1) \
 		"cd $(NODE_DIR) && { [ -f $(NODE_BIN).pid ] && kill -TERM \$$(cat $(NODE_BIN).pid) 2>/dev/null; :; }; \
 		 rm -f $(NODE_BIN).pid; sleep 1; \
-		 $(ULIMIT_FDS) nohup ./$(NODE_BIN) --group=$(GROUP) --peer=$(2):$(PORT):0 --peers='$(PEERS)' \
+		 $(ULIMIT_FDS) nohup env $(NODE_ENV) ./$(NODE_BIN) --group=$(GROUP) --peer=$(2):$(PORT):0 --peers='$(PEERS)' \
 			--election_timeout_ms=$(ELECTION_TIMEOUT_MS) --data_dir=$(NODE_DIR)/data \
 			--raft_sync=$(SYNC) --event_dispatcher_num=$(EVENT_DISPATCHERS) \
 			--bthread_concurrency=$(SERVER_CONCURRENCY) \
@@ -256,7 +275,10 @@ client:
 SWEEP_WARMUP    ?= 10
 SWEEP_MEASURE   ?= 30
 SWEEP_FIX_CSV   ?= exchange-fix.csv
-SWEEP_FIX_RATES ?= 10000 25000 50000 75000 100000 150000 200000
+# The same ladder sequencer's arms were swept on, so the curves are
+# directly comparable and the knee is actually reached: sequencer-fix
+# ran clean through 400k and collapsed by 500k.
+SWEEP_FIX_RATES ?= 10000 25000 50000 75000 100000 150000 200000 250000 300000 350000 400000 450000 500000
 
 ## Every client box needs a DISTINCT --client_id: it goes in the high
 ## bits of every ClOrdID, and the exchange rejects a duplicate live

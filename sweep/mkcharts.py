@@ -327,22 +327,23 @@ CFG={
  # so the median carries a commit-then-read cycle the output gateways'
  # subscribers do not pay.
  # The exchange application (github.com/olegabu/exchange) over the same
- # FIX-journal path as sequencer-fix, so the two are directly
- # comparable: identical gateway, identical delivery, and the whole
- # difference is a matching engine on the apply thread instead of an
- # eight-byte counter. sequencer-fix's 400k is the reference this is
- # measured against.
+ # FIX-journal path as sequencer-fix: identical gateway, identical
+ # delivery, and the whole intended difference is a matching engine on
+ # the apply thread instead of an eight-byte counter. sequencer-fix's
+ # 400k is the reference.
  #
- # PROVISIONAL. The axes below are a rendering choice, not a claim: the
- # x range is set to sequencer-fix's ladder so the two charts line up,
- # and there is deliberately NO knee annotation and no prose about
- # where it turns, because no sweep has been run yet. Fill both in from
- # the first sweep and rewrite this comment.
- "exchange-fix": (520000,100000,(500,200000),
-                     [500,1000,2000,5000,10000,50000,200000], 25000,
-                     [],
+ # The x axis is sequencer-fix's so the two line up. The y axis is NOT:
+ # it runs to 8 seconds, because past the knee this collapses by three
+ # orders of magnitude rather than the one sequencer's arms show. The
+ # first render of this chart reused sequencer-fix's 200,000us ceiling
+ # and silently clipped eleven of thirteen points off the top of the
+ # canvas -- exactly the failure exchange/docs/spec.md §10.9 is about,
+ # caught by rendering it and looking.
+ "exchange-fix": (520000,100000,(700,8000000),
+                     [1000,5000,20000,100000,500000,2000000,8000000], 25000,
+                     [(37500,"knee",150)],
                      "exchange-fix - a CLOB on sequencer, over FIX 4.4",
-                     "Provisional axes; no sweep run yet. Compare against sequencer-fix, which is the same path without matching."),
+                     "Clean through 25k (p50 1.2ms), collapsing by 50k. Not the state machine, not the input path: measurements.md §3."),
  "sequencer-fix": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 25000,
                      [(450000,"knee",16)],
