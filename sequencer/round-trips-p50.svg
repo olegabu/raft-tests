@@ -2,7 +2,7 @@
 <rect width="900" height="504" fill="#fcfcfb"/>
 <text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer: gateway round trips, p50 vs offered rate</text>
 <text x="78" y="46" font-size="12" fill="#52514e">p50 latency vs offered rate, same fleet and sweep as the panels above. Log latency scale.</text>
-<text x="78" y="62" font-size="12" fill="#52514e">At 100k: output: brpc 846 µs; output: gRPC 825 µs; output: WebSocket 819 µs; FIX 4.4 (journal) 905 µs; FIX 4.4</text>
+<text x="78" y="62" font-size="12" fill="#52514e">At 100k: output: brpc 846 µs; output: gRPC 825 µs; output: WebSocket 819 µs; FIX 4.4 (journal) 1,055 µs; FIX 4.4</text>
 <text x="78" y="78" font-size="12" fill="#52514e">(inline) 1,011 µs; FIX 4.4 (QuickFIX) 982 µs; braft (raw ops) 793 µs.</text>
 <text x="78" y="94" font-size="12" fill="#52514e">Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.</text>
 <rect x="78" y="385.6" width="782" height="26.4" fill="#f0efec"/>
@@ -98,18 +98,24 @@
 <circle cx="703.6" cy="147.3" r="4.5" fill="#fcfcfb" stroke="#6d28d9" stroke-width="2"/>
 <circle cx="781.8" cy="134.2" r="4.5" fill="#fcfcfb" stroke="#6d28d9" stroke-width="2"/>
 <circle cx="860.0" cy="128.8" r="4.5" fill="#fcfcfb" stroke="#6d28d9" stroke-width="2"/>
-<path d="M93.6,400.1 L117.1,401.0 L156.2,396.5 L195.3,393.9 L234.4,390.8 L273.5,388.1 L312.6,385.1 L351.7,381.3 L390.8,378.2 L429.9,372.1 L469.0,339.8" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="93.6" cy="400.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="117.1" cy="401.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="156.2" cy="396.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="195.3" cy="393.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="234.4" cy="390.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="273.5" cy="388.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="312.6" cy="385.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="351.7" cy="381.3" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="390.8" cy="378.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="429.9" cy="372.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="469.0" cy="339.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<path d="M93.6,397.1 L117.1,393.7 L156.2,388.5 L195.3,385.4 L234.4,382.9 L273.5,379.6 L312.6,377.0 L351.7,373.2 L390.8,367.0 L429.9,361.4 L469.0,353.8 L547.2,342.7 L586.3,334.7 L625.4,323.0 L703.6,287.6 L781.8,144.1 L860.0,137.9" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="93.6" cy="397.1" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="117.1" cy="393.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="156.2" cy="388.5" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="195.3" cy="385.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="234.4" cy="382.9" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="273.5" cy="379.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="312.6" cy="377.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="351.7" cy="373.2" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="390.8" cy="367.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="429.9" cy="361.4" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="469.0" cy="353.8" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="547.2" cy="342.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="586.3" cy="334.7" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="625.4" cy="323.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="703.6" cy="287.6" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="781.8" cy="144.1" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="860.0" cy="137.9" r="4.5" fill="#fcfcfb" stroke="#2a78d6" stroke-width="2"/>
 <path d="M93.6,406.5 L117.1,401.1 L156.2,395.4 L195.3,390.2 L234.4,385.1 L273.5,371.4 L312.6,349.6 L351.7,330.0 L390.8,323.7 L429.9,319.4 L469.0,312.8 L547.2,304.5 L586.3,290.6 L625.4,147.1 L703.6,138.4 L860.0,124.9" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="93.6" cy="406.5" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="117.1" cy="401.1" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>

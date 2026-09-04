@@ -537,6 +537,38 @@ The combined `knee-curves.svg` (aeron/braft/openraft on one chart)
 stays scoped to those three; sequencer's own comparison is
 `round-trips.svg`.
 
+## Where each gateway's knee actually is
+
+Every gateway swept on the identical seventeen-rate ladder to 500k, so
+the knees are comparable rather than bracketed:
+
+| round trip | last clean rate | knee | ceiling (achieved plateau) |
+|---|---|---|---|
+| FIX 4.4 (journal) | **400k** (0 dropped) | 400k-450k | ~411k |
+| output: gRPC | 350k | 350k-400k | ~380k |
+| output: brpc | 325k | 325k-350k | ~360k |
+| output: WebSocket | 325k | 325k-350k | ~383k |
+| FIX 4.4 (inline) | 300k | 325k-350k | ~330k |
+| FIX 4.4 (QuickFIX) | 125k | 125k-150k | ~158k |
+
+Two things this changes.
+
+**The FIX journal gateway has the highest ceiling of the lot**, not the
+lowest as its old curve suggested. That curve stopped at 250k -- fully
+achieving the offered rate with zero drops, so it ended before it had
+shown anything, and looked inconclusive because it WAS inconclusive.
+It carries 400k with zero drops at a 6.7ms p50, and 350k at 3.4ms.
+
+**Zero rig drops right up to each knee.** At the collapse points the
+rig still delivered 358-411k achieved, so these are the system's knees,
+not the load generator's -- a question that was previously only
+bracketed.
+
+Read the p50 column with the p90 beside it, though: FIX-journal at 400k
+is "clean" by drops and by p50 (6,676us) while its p90 has already gone
+to 50,208us. The elbow arrives in the tail one rate before it arrives
+in the median.
+
 ## The residual tail, located
 
 Taking segment creation and sealing off the apply thread removed the
