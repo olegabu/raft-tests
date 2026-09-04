@@ -450,8 +450,15 @@ RT = [("sequencer",                   "synchronous ack", C1),
       # deliberate exercise (run the palette validator) rather than a
       # guess. C1 is free whenever the ack path is not in the same CSV,
       # which is the case for the gateway-comparison sweep.
-      ("sequencer-fix",               "FIX 4.4 (journal)", C1),
-      ("sequencer-fix-inline",        "FIX 4.4 (inline)",  C2),
+      # "FIX", not "FIX 4.4". The version is constant across all three
+      # FIX arms, so repeating it in the legend discriminates nothing --
+      # what separates these series is journal vs inline vs QuickFIX.
+      # "FIX" still earns its place, because that DOES separate them
+      # from brpc/gRPC/WebSocket/braft. The version is stated once in
+      # the subtitle, where a constant belongs, and in each per-product
+      # chart's own title where it appears only once anyway.
+      ("sequencer-fix",               "FIX (journal)", C1),
+      ("sequencer-fix-inline",        "FIX (inline)",  C2),
       # Muted, not a sixth categorical hue: this is the floor the others
       # stand on, a reference rather than a peer. It also keeps the
       # palette at the five slots that were checked all-pairs for CVD.
@@ -471,7 +478,7 @@ RT = [("sequencer",                   "synchronous ack", C1),
       # read as a second grey beside the INK2 floor line at 2px, so the
       # red is the one that is distinct as a HUE and not merely as a
       # number. All 21 pairs pass.
-      ("sequencer-quickfix",          "FIX 4.4 (QuickFIX)", C6),
+      ("sequencer-quickfix",          "FIX (QuickFIX)", C6),
       ("braft-multi",                 "braft (raw ops)",   INK2)]
 rt_present = [(n,lab,c) for n,lab,c in RT if n in D]
 
@@ -517,6 +524,7 @@ if COMBINED and len(rt_present) >= 2:
     _n = {2:"two",3:"three",4:"four",5:"five",6:"six"}.get(len(rt_present), str(len(rt_present)))
     o = head(W,H,f"sequencer: {_n} round trips, p50 and p99",
       ["Every hop this repo measures, same fleet and same sweep. Identical axes across panels; log latency scale.",
+       "FIX arms are FIX 4.4 throughout; they differ in delivery path, not protocol version.",
        "Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.",
        "Past the knee, latency runs to whole seconds; those points clip at the panel top.",
        # Only true when that arm is actually in the CSVs being charted.
@@ -601,7 +609,7 @@ if COMBINED and len(rt_present) >= 2:
     _sub = ("At 100k: " + "; ".join(_at100k) + "." if _at100k
             else "No 100k point in this dataset.")
     _sublines = (["p50 latency vs offered rate, same fleet and sweep as the panels above. "
-                  "Log latency scale."]
+                  "Log latency scale. FIX arms are FIX 4.4 throughout."]
                  + wrap_sub(_sub)
                  + ["Hollow marker = the cluster fell behind the offered rate. "
                     "Shaded band = at or below 1 ms."])

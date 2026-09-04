@@ -2,8 +2,9 @@
 <rect width="942" height="914" fill="#fcfcfb"/>
 <text x="78" y="28" font-size="16" font-weight="600" fill="#0b0b0b">sequencer: 7 round trips, p50 and p99</text>
 <text x="78" y="46" font-size="12" fill="#52514e">Every hop this repo measures, same fleet and same sweep. Identical axes across panels; log latency scale.</text>
-<text x="78" y="62" font-size="12" fill="#52514e">Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.</text>
-<text x="78" y="78" font-size="12" fill="#52514e">Past the knee, latency runs to whole seconds; those points clip at the panel top.</text>
+<text x="78" y="62" font-size="12" fill="#52514e">FIX arms are FIX 4.4 throughout; they differ in delivery path, not protocol version.</text>
+<text x="78" y="78" font-size="12" fill="#52514e">Hollow marker = the cluster fell behind the offered rate. Shaded band = at or below 1 ms.</text>
+<text x="78" y="94" font-size="12" fill="#52514e">Past the knee, latency runs to whole seconds; those points clip at the panel top.</text>
 <defs>
 <clipPath id="pan0"><rect x="56" y="118" width="280" height="208"/></clipPath>
 <clipPath id="pan1"><rect x="350" y="118" width="280" height="208"/></clipPath>
@@ -244,7 +245,7 @@
 <text x="303.2" y="591" font-size="10" fill="#898781" text-anchor="middle">450k</text>
 <line x1="330.0" y1="574" x2="330.0" y2="578" stroke="#c3c2b7" stroke-width="1"/>
 <text x="330.0" y="591" font-size="10" fill="#898781" text-anchor="middle">500k</text>
-<text x="62" y="370" font-size="12" font-weight="600" fill="#0b0b0b">FIX 4.4 (journal)</text>
+<text x="62" y="370" font-size="12" font-weight="600" fill="#0b0b0b">FIX (journal)</text>
 <g clip-path="url(#pan3)">
 <path d="M67.4,552.2 L75.4,549.8 L88.8,543.8 L102.2,541.4 L115.6,538.1 L129.0,533.6 L142.4,523.0 L155.8,518.9 L169.2,510.1 L182.6,497.2 L196.0,482.3 L222.8,441.9 L236.2,445.6 L249.6,438.4 L276.4,404.7 L303.2,388.7 L330.0,392.5" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="67.4" cy="552.2" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
@@ -310,7 +311,7 @@
 <text x="597.2" y="591" font-size="10" fill="#898781" text-anchor="middle">450k</text>
 <line x1="624.0" y1="574" x2="624.0" y2="578" stroke="#c3c2b7" stroke-width="1"/>
 <text x="624.0" y="591" font-size="10" fill="#898781" text-anchor="middle">500k</text>
-<text x="356" y="370" font-size="12" font-weight="600" fill="#0b0b0b">FIX 4.4 (inline)</text>
+<text x="356" y="370" font-size="12" font-weight="600" fill="#0b0b0b">FIX (inline)</text>
 <g clip-path="url(#pan4)">
 <path d="M361.4,556.3 L369.4,552.8 L382.8,545.6 L396.2,536.3 L409.6,528.5 L423.0,513.6 L436.4,499.3 L449.8,491.1 L463.2,485.2 L476.6,453.9 L490.0,478.2 L516.8,444.1 L530.2,398.4 L543.6,392.1 L570.4,386.1 L624.0,377.8" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="361.4" cy="556.3" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
@@ -374,7 +375,7 @@
 <text x="891.2" y="591" font-size="10" fill="#898781" text-anchor="middle">450k</text>
 <line x1="918.0" y1="574" x2="918.0" y2="578" stroke="#c3c2b7" stroke-width="1"/>
 <text x="918.0" y="591" font-size="10" fill="#898781" text-anchor="middle">500k</text>
-<text x="650" y="370" font-size="12" font-weight="600" fill="#0b0b0b">FIX 4.4 (QuickFIX)</text>
+<text x="650" y="370" font-size="12" font-weight="600" fill="#0b0b0b">FIX (QuickFIX)</text>
 <g clip-path="url(#pan5)">
 <path d="M655.4,553.6 L663.4,552.6 L676.8,548.7 L690.2,545.0 L703.6,539.4 L717.0,513.4 L730.4,403.7 L743.8,394.0 L757.2,390.3 L770.6,386.0 L784.0,383.4" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="655.4" cy="553.6" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
