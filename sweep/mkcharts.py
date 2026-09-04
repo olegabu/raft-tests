@@ -15,7 +15,22 @@ import csv, math, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 _args = sys.argv[1:]
 CSVS = [a for a in _args if a.endswith(".csv")] or [os.path.join(HERE, "knee-sweep.csv")]
-_dirs = [a for a in _args if not a.endswith(".csv")]
+# round-trips.svg and round-trips-p50.svg are the CROSS-round-trip
+# comparison, and they are written only when asked for with --combined.
+#
+# They used to be written by any invocation that happened to see two or
+# more products, which made them a shared mutable output that the LAST
+# run to touch them won. `make chart-output` passes one CSV containing
+# three products, so running it after `make charts-gateways` silently
+# replaced the seven-series overlay with a three-series one -- a chart
+# that looks entirely plausible and is missing four gateways. Nothing
+# errored, and the file was committed that way.
+#
+# Opt-in rather than a heuristic on CSV count: a target either means to
+# produce the comparison or it does not, and that is not something to
+# infer from how many files it happened to pass.
+COMBINED = "--combined" in _args
+_dirs = [a for a in _args if not a.endswith(".csv") and not a.startswith("--")]
 OUT  = _dirs[0] if _dirs else os.path.dirname(HERE)
 os.makedirs(OUT, exist_ok=True)
 
@@ -476,7 +491,7 @@ if _clashes:
         "palette clash: these series would be drawn in one colour -- "
         + "; ".join(f"{c}: {', '.join(labs)}" for c, labs in _clashes.items())
         + "\nGive one of them a new hue and re-run validate_palette.py.")
-if len(rt_present) >= 2:
+if COMBINED and len(rt_present) >= 2:
     # Rows follow from how many round trips the CSVs actually carry.
     # This was 3x2 for the six the repo had; a seventh (FIX) would have
     # drawn off the bottom of the canvas.
@@ -621,5 +636,12 @@ if len(rt_present) >= 2:
 
 _written = [n for n in CFG if n in D]
 _combined = "knee-curves.svg and " if present else ""
-_rt = f", round-trips.svg + round-trips-p50.svg ({len(rt_present)} round trips)" if len(rt_present)>=2 else ""
+if COMBINED:
+    _rt = (f", round-trips.svg + round-trips-p50.svg ({len(rt_present)} round trips)"
+           if len(rt_present) >= 2 else "")
+elif len(rt_present) >= 2:
+    _rt = (f" (skipped the {len(rt_present)}-series round-trips overlay: pass --combined "
+           f"to write it, and only from a target that hands over EVERY gateway CSV)")
+else:
+    _rt = ""
 print(f"wrote {_combined}{len(_written)} per-product chart(s) ({', '.join(_written)}){_rt} to {OUT}")

@@ -969,9 +969,15 @@ BRAFT_FLOOR_CSV ?= ../braft/braft-multi-c7a.csv
 ## band that covered the whole plot. The fix it led to (background
 ## segment prepare/seal) is visible in the full sweeps instead.
 charts-gateways:
-	python3 ../sweep/mkcharts.py $(SWEEP_OUTPUT_CSV) $(SWEEP_FIX_CSV) \
+	python3 ../sweep/mkcharts.py --combined $(SWEEP_OUTPUT_CSV) $(SWEEP_FIX_CSV) \
 		$(SWEEP_FIX_INLINE_CSV) $(SWEEP_QUICKFIX_CSV) $(BRAFT_FLOOR_CSV) $(CHART_DIR)
 
+## Deliberately NOT --combined: charts-gateways owns round-trips.svg
+## and round-trips-p50.svg. Both targets would otherwise write that one
+## pair of files with DIFFERENT series -- seven gateways here, six
+## ack/direct/relay/output round trips there -- so whichever ran last
+## would win, which is precisely how the overlay silently lost four of
+## its seven series once already.
 charts-all:
 	python3 ../sweep/mkcharts.py $(SWEEP_CSV) $(SWEEP_DIRECT_CSV) $(SWEEP_RELAY_CSV) \
 		$(SWEEP_OUTPUT_CSV) $(CHART_DIR)
