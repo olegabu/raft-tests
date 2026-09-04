@@ -332,18 +332,17 @@ CFG={
  # the apply thread instead of an eight-byte counter. sequencer-fix's
  # 400k is the reference.
  #
- # The x axis is sequencer-fix's so the two line up. The y axis is NOT:
- # it runs to 8 seconds, because past the knee this collapses by three
- # orders of magnitude rather than the one sequencer's arms show. The
- # first render of this chart reused sequencer-fix's 200,000us ceiling
- # and silently clipped eleven of thirteen points off the top of the
- # canvas -- exactly the failure exchange/docs/spec.md §10.9 is about,
- # caught by rendering it and looking.
- "exchange-fix": (520000,100000,(700,8000000),
-                     [1000,5000,20000,100000,500000,2000000,8000000], 25000,
-                     [(37500,"knee",150)],
+ # The x axis is sequencer-fix's so the two line up. The y axis runs to
+ # one second: past its knee this degrades further than sequencer's
+ # arms do. An earlier version of this entry reused sequencer-fix's
+ # 200,000us ceiling and silently clipped eleven of thirteen points off
+ # the top of the canvas -- exactly the failure exchange/docs/spec.md
+ # §10.9 is about, caught by rendering it and looking.
+ "exchange-fix": (520000,100000,(700,1000000),
+                     [1000,2000,5000,20000,100000,400000,1000000], 100000,
+                     [(125000,"knee",150)],
                      "exchange-fix - a CLOB on sequencer, over FIX 4.4",
-                     "Clean through 25k (p50 1.2ms), collapsing by 50k. Not the state machine, not the input path: measurements.md §3."),
+                     "p50 near 1ms through 100k, peaking at ~125k achieved. measurements.md §3 explains the earlier 25k knee."),
  "sequencer-fix": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 25000,
                      [(450000,"knee",16)],

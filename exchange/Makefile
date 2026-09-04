@@ -74,6 +74,12 @@ SEGMENT_SIZE ?= 8388608
 # journaled and replicated rather than configured per node -- config
 # that differs between replicas is a divergence waiting to happen.
 SYMBOL   ?= ABC
+# How many ticks either side of the mid the order flow uses. It decides
+# DEPTH PER PRICE LEVEL, which is the thing liquibook's cancel/replace
+# cost is linear in: it locates an order by scanning its price level.
+# The default is deliberately narrow so orders cross; raise it to spread
+# the same book over more levels (see measurements.md §3).
+PRICE_LEVELS ?= 5
 TICK     ?= 0.01
 LOT      ?= 1
 MAX_QTY  ?= 1000
@@ -268,7 +274,7 @@ client:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
 		"cd $(CLIENT_DIR) && ./$(LOADGEN_BIN) \
 			--fix_gateway_addr=$(subst $(SPACE),$(COMMA),$(FIX_ENDPOINTS)) \
-			--symbol=$(SYMBOL) --client_id=1 \
+			--symbol=$(SYMBOL) --price_levels=$(PRICE_LEVELS) --client_id=1 \
 			--mode $(MODE) --pace $(PACE) --rate $(RATE) --burst $(BURST) \
 			--warmup $(WARMUP) --measure $(MEASURE) --drain_timeout $(DRAIN_TIMEOUT) --logtostderr"
 
@@ -288,7 +294,7 @@ FIX_CLIENT_CMD = ./$(LOADGEN_BIN) \
 	--fix_gateway_addr=$(subst $(SPACE),$(COMMA),$(FIX_ENDPOINTS)) \
 	--fix_sender_comp_id=FIX{CLIENT} \
 	--client_id={CLIENT} \
-	--symbol=$(SYMBOL) \
+	--symbol=$(SYMBOL) --price_levels=$(PRICE_LEVELS) \
 	--mode open --pace $(PACE) --rate {RATE} --burst $(BURST) \
 	--warmup $(SWEEP_WARMUP) --measure $(SWEEP_MEASURE) \
 	--drain_timeout $(DRAIN_TIMEOUT) --hdr_raw_out {RAW} --logtostderr
