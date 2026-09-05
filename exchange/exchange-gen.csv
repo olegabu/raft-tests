@@ -1,5 +1,8 @@
 product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet
-exchange-fix,50000,49980,887,1047,1359,1986,7864,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
-exchange-fix,100000,71553,1156,6976,209408,368640,19660800,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
-exchange-fix,200000,102418,3051520,5029888,5431296,5468160,22626304,1312536,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
-exchange-fix,300000,90695,8814592,9879552,10141696,10174464,23887872,5936584,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+exchange-fix,25000,25000,809,932,1284,26688,52224,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+exchange-fix,50000,49980,906,1081,232960,404480,473856,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+exchange-fix,75000,74980,1022,1288,386816,545280,720896,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+exchange-fix,100000,72154,1146,1705,224768,397824,492800,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+exchange-fix,125000,89022,1274,2104,214144,301056,484608,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+exchange-fix,150000,102665,1432,2820,236288,315392,457216,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+exchange-fix,200000,128895,2258,36448,213504,624640,707584,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge

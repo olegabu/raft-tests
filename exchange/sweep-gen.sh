@@ -30,6 +30,27 @@ read -r -a GWS <<< "$GATEWAYS"
 TOTAL=$(( ${#HOSTS[@]} * PER ))
 echo "sweep-gen: ${#HOSTS[@]} box(es) x $PER generator(s) = $TOTAL sessions across ${#GWS[@]} gateway(s)"
 
+# Every gateway must be accepting connections BEFORE any client starts.
+# A client that starts first either fails to connect or spends its
+# warm-up retrying, and then the rates are offered by a changing number
+# of sessions -- which is not a measurement of anything. Checked from a
+# client box, because the gateways listen on private addresses.
+PROBE_HOST=${HOSTS[0]}
+for gw in "${GWS[@]}"; do
+  gwh=${gw%%:*}; gwp=${gw##*:}
+  ready=""
+  for _ in $(seq 1 30); do
+    if ssh $SSH_OPTS "ubuntu@$PROBE_HOST" \
+        "timeout 2 bash -c '</dev/tcp/$gwh/$gwp' 2>/dev/null"; then ready=yes; break; fi
+    sleep 2
+  done
+  if [ -z "$ready" ]; then
+    echo "sweep-gen: gateway $gw never accepted a connection; aborting rather than measuring a partial fleet"
+    exit 1
+  fi
+  echo "sweep-gen: gateway $gw ready"
+done
+
 echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > "$CSV"
 
 for R in "$@"; do
