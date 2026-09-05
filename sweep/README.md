@@ -109,7 +109,7 @@ any new sweep instead of assuming they still hold.
 
 `../knee-braft-before-ae-cache.svg` is the one chart in the repo root
 `mkcharts.py` does not produce: it is
-[commit `59e4e51`'s `knee-braft.svg`](https://github.com/olegabu/raft-tests/blob/59e4e51/knee-braft.svg),
+[commit `59e4e51`'s `knee-braft.svg`](https://github.com/opensequencer/raft-tests/blob/59e4e51/knee-braft.svg),
 restored verbatim as a separate file rather than regenerated, so it shows exactly
 what shipped before `AE_CACHE`/`PIPELINE` existed as settings. It is a fixed
 historical artifact — regenerating `knee-braft.svg` from a new sweep never touches

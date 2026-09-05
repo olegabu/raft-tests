@@ -150,7 +150,7 @@ rather than queueing — once that's gone, there's nothing left to separate them
 | ![braft before the append-entries cache: two separate knees, the tail turning at 65k while p50 holds to roughly 90k](../knee-braft-before-ae-cache.svg) | ![braft after the append-entries cache and PIPELINE=8: one knee, both percentiles flat together to 160k then breaking as one](../knee-braft.svg) |
 
 Same axes, same rig, same fleet class — only the server flags differ. The left
-chart is [an earlier revision of this repo's own chart](https://github.com/olegabu/raft-tests/blob/59e4e51/knee-braft.svg),
+chart is [an earlier revision of this repo's own chart](https://github.com/opensequencer/raft-tests/blob/59e4e51/knee-braft.svg),
 restored rather than redrawn, so it is exactly what shipped before this fix
 existed. The chart on the right is the one referenced throughout this README as
 "the knee".

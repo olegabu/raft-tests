@@ -1,4 +1,4 @@
-# Product-specific targets for sequencer (https://github.com/olegabu/sequencer),
+# Product-specific targets for sequencer (https://github.com/opensequencer/sequencer),
 # a raft-based ordering/journaling library — not a bespoke atomic-counter
 # demo like braft/openraft/aeron here, but a real application framework;
 # APP selects which of its examples/ this measures (default: its one
@@ -10,7 +10,7 @@
 include ../common.mk
 
 APP ?= counter
-# Path to a sibling checkout of https://github.com/olegabu/sequencer.
+# Path to a sibling checkout of https://github.com/opensequencer/sequencer.
 # Override if yours isn't a sibling of this repo.
 SEQUENCER_DIR ?= ../../sequencer
 

@@ -1,6 +1,6 @@
 # exchange on the fleet
 
-Fleet harness for [`exchange`](https://github.com/olegabu/exchange): a
+Fleet harness for [`exchange`](https://github.com/opensequencer/exchange): a
 deterministic central limit order book replicated by `sequencer`,
 reached over FIX 4.4.
 

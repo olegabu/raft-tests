@@ -1,6 +1,6 @@
 # Product-specific targets for the `exchange` application: a
 # deterministic CLOB on sequencer, reached over FIX 4.4
-# (github.com/olegabu/exchange). Provision the EC2 fleet first with the
+# (github.com/opensequencer/exchange). Provision the EC2 fleet first with the
 # root Makefile (`make deploy` from the repo root); this Makefile only
 # builds, pushes and runs against whatever that created.
 #
@@ -162,7 +162,7 @@ DRAIN_TIMEOUT ?= 10
 
 ## Build exchange's release preset. It add_subdirectory's sequencer, so
 ## SEQUENCER_DIR must resolve from the exchange checkout (its default,
-## ../sequencer, is correct for the standard total-order/ layout).
+## ../sequencer, is correct for the standard opensequencer/ layout).
 build:
 	cd $(EXCHANGE_DIR) && cmake --preset release && cmake --build --preset release
 

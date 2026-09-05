@@ -326,7 +326,7 @@ CFG={
  # output reaches a FIX client by the journal (specification.md 8.11),
  # so the median carries a commit-then-read cycle the output gateways'
  # subscribers do not pay.
- # The exchange application (github.com/olegabu/exchange) over the same
+ # The exchange application (github.com/opensequencer/exchange) over the same
  # FIX-journal path as sequencer-fix: identical gateway, identical
  # delivery, and the whole intended difference is a matching engine on
  # the apply thread instead of an eight-byte counter. sequencer-fix's

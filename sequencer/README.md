@@ -1,6 +1,6 @@
 # sequencer
 
-Benchmarks [sequencer](https://github.com/olegabu/sequencer) — a real
+Benchmarks [sequencer](https://github.com/opensequencer/sequencer) — a real
 application framework, not a bespoke atomic-counter demo like
 `braft`/`openraft`/`aeron` here — against this repo's own 3-node
 multi-AZ fleet, following the root README's ["Adding a new raft
