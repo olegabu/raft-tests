@@ -338,11 +338,14 @@ CFG={
  # 200,000us ceiling and silently clipped eleven of thirteen points off
  # the top of the canvas -- exactly the failure exchange/docs/spec.md
  # §10.9 is about, caught by rendering it and looking.
- "exchange-fix": (520000,100000,(700,1000000),
-                     [1000,2000,5000,20000,100000,400000,1000000], 100000,
-                     [(125000,"knee",150)],
+ # y bound derived from the data (max p99 3,747,840us), not guessed:
+ # this axis has now been set too low twice, silently clipping points
+ # off the top of the canvas both times (spec.md §10.9).
+ "exchange-fix": (520000,100000,(700,4000000),
+                     [1000,3000,10000,40000,150000,600000,4000000], 100000,
+                     [(123000,"ceiling",150)],
                      "exchange-fix - a CLOB on sequencer, over FIX 4.4",
-                     "p50 near 1ms through 100k, peaking at ~125k achieved. measurements.md §3 explains the earlier 25k knee."),
+                     "Zero drops through 150k, p50 ~1ms to 100k, ceiling ~123k. Hollow = offered rate not met."),
  "sequencer-fix": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 25000,
                      [(450000,"knee",16)],

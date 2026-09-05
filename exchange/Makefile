@@ -79,7 +79,20 @@ SYMBOL   ?= ABC
 # cost is linear in: it locates an order by scanning its price level.
 # The default is deliberately narrow so orders cross; raise it to spread
 # the same book over more levels (see measurements.md §3).
-PRICE_LEVELS ?= 5
+PRICE_LEVELS ?= 500
+
+# "cycle" is the real flow. "rest-cancel" is a control that never
+# matches -- every order a buy, cancelled immediately -- which isolates
+# the input path, apply-with-a-book and the output path from the cost
+# of matching.
+FLOW ?= cycle
+
+# Cap on outstanding requests per client. 0 lets the harness choose
+# max(1000, rate/10), which at high rates is what stops a client
+# offering its full share -- so a run that shows drops well before the
+# ceiling should be repeated with this raised before the drops are
+# attributed to the exchange.
+MAX_INFLIGHT ?= 0
 TICK     ?= 0.01
 LOT      ?= 1
 MAX_QTY  ?= 1000
@@ -99,6 +112,7 @@ FIX_GATEWAYS ?= 1
 FIX_NODES        ?= $(NODE1_PRIV)
 FIX_NODES_PUBLIC ?= $(NODE1)
 FIX_ENV ?=
+GATEWAY_ID_BASE ?= 0
 
 # sequencer's own apply-loop instrument, off unless set (setting it
 # costs a clock read per input, so it is never on for a published
@@ -211,9 +225,18 @@ start:
 ## every output a session receives originates in its own inputs, and a
 ## PASSIVE FILL is exactly not that. sequencer's counter can measure
 ## both arms; an exchange cannot.
+## Each gateway gets a DISTINCT --gateway_id, and that is not optional:
+## a gateway numbers its client sessions from 1 inside its own process,
+## so two gateways both hand out session 1 while sharing one journal.
+## The exchange composes the id into the session id it puts on the wire
+## and each gateway delivers only what its own id addresses; two
+## gateways sharing an id deliver each other's execution reports to the
+## wrong clients. Measured before the fix: ~30% of replies unanswered.
+## The base is per host so ids stay distinct across hosts too.
 start-fix:
-	@for h in $(FIX_NODES_PUBLIC); do \
-		$(MAKE) --no-print-directory start-fix-on FIX_HOST=$$h; \
+	@i=0; for h in $(FIX_NODES_PUBLIC); do \
+		$(MAKE) --no-print-directory start-fix-on FIX_HOST=$$h GATEWAY_ID_BASE=$$(( i * 100 )); \
+		i=$$(( i + 1 )); \
 	done
 
 start-fix-on:
@@ -222,6 +245,7 @@ start-fix-on:
 		   p=\$$(( $(FIX_PORT) + \$$i )); \
 		   rm -rf fix_resume_\$$i fix_seq_\$$i; \
 		   $(ULIMIT_FDS) nohup env $(FIX_ENV) ./$(FIX_GATEWAY_BIN) --node_peers=$(NODE1_PRIV):$(PORT) \
+			--gateway_id=\$$(( $(GATEWAY_ID_BASE) + \$$i )) \
 			--listen_port=\$$p --data_dir=$(NODE_DIR)/data \
 			--resume_file=$(NODE_DIR)/fix_resume_\$$i \
 			--sequence_store_dir=$(NODE_DIR)/fix_seq_\$$i \
@@ -274,7 +298,8 @@ client:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(CLIENT) \
 		"cd $(CLIENT_DIR) && ./$(LOADGEN_BIN) \
 			--fix_gateway_addr=$(subst $(SPACE),$(COMMA),$(FIX_ENDPOINTS)) \
-			--symbol=$(SYMBOL) --price_levels=$(PRICE_LEVELS) --client_id=1 \
+			--symbol=$(SYMBOL) --price_levels=$(PRICE_LEVELS) --flow=$(FLOW) \
+			--max_inflight=$(MAX_INFLIGHT) --client_id=1 \
 			--mode $(MODE) --pace $(PACE) --rate $(RATE) --burst $(BURST) \
 			--warmup $(WARMUP) --measure $(MEASURE) --drain_timeout $(DRAIN_TIMEOUT) --logtostderr"
 
@@ -294,7 +319,8 @@ FIX_CLIENT_CMD = ./$(LOADGEN_BIN) \
 	--fix_gateway_addr=$(subst $(SPACE),$(COMMA),$(FIX_ENDPOINTS)) \
 	--fix_sender_comp_id=FIX{CLIENT} \
 	--client_id={CLIENT} \
-	--symbol=$(SYMBOL) --price_levels=$(PRICE_LEVELS) \
+	--symbol=$(SYMBOL) --price_levels=$(PRICE_LEVELS) --flow=$(FLOW) \
+	--max_inflight=$(MAX_INFLIGHT) \
 	--mode open --pace $(PACE) --rate {RATE} --burst $(BURST) \
 	--warmup $(SWEEP_WARMUP) --measure $(SWEEP_MEASURE) \
 	--drain_timeout $(DRAIN_TIMEOUT) --hdr_raw_out {RAW} --logtostderr
@@ -305,7 +331,19 @@ FIX_CLIENT_CMD = ./$(LOADGEN_BIN) \
 ## Percentiles are merged across clients by sweep/merge-hdr.py, because
 ## percentiles cannot be averaged and a straggler client is invisible in
 ## an average.
-sweep-fix:
+## Stale raw histograms are worse than missing ones: sweep-multi.sh
+## scp's /tmp/raw.csv from each client after every rate, and if the
+## clients never ran -- a bad flag, a stale binary -- it silently
+## copies the PREVIOUS run's file and reports its percentiles as this
+## run's. That happened here: a run with achieved=0 reported the p50 of
+## the run before it. Clearing them first turns that into a missing
+## histogram, which the script does warn about.
+clear-raw:
+	@for h in $(CLIENTS); do \
+		ssh $(SSH_OPTS) $(SSH_USER)@$$h "rm -f /tmp/raw.csv" 2>/dev/null; \
+	done
+
+sweep-fix: clear-raw
 	echo 'product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet' > $(SWEEP_FIX_CSV)
 	CLIENTS="$(CLIENTS)" SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
 		CLIENT_CMD="$(FIX_CLIENT_CMD)" \

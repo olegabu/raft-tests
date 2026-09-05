@@ -1,0 +1,3 @@
+product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet
+exchange-fix,100000,70195,1077,1669,219520,294912,2285568,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+exchange-fix,200000,118477,39456,133248,1210368,1300480,5931008,629509,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
