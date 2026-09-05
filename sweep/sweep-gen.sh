@@ -21,6 +21,12 @@ PROD=$1; CSV=$2; PER=$3; WU=$4; ME=$5; shift 5
 SSH_KEY=${SSH_KEY:-~/.ssh/id_rsa}
 SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 CLIENT_DIR=${CLIENT_DIR:-exchange}
+# Which load generator to run on the client boxes. The script is
+# app-agnostic otherwise: it only needs a binary that takes
+# --fix_gateway_addr/--fix_sender_comp_id/--client_id and the usual
+# open-loop flags, which both exchange_load_generator and the counter's
+# load_generator do.
+GEN_BIN=${GEN_BIN:-exchange_load_generator}
 FLEET=${FLEET:-unknown}
 EXTRA=${EXTRA:-}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -67,7 +73,7 @@ for R in "$@"; do
       h=${HOSTS[$hi]}
       gw=${GWS[$(( id % ${#GWS[@]} ))]}          # round-robin across gateways
       cid=$(( id + 1 ))
-      ssh $SSH_OPTS "ubuntu@$h" "cd $CLIENT_DIR && ./exchange_load_generator \
+      ssh $SSH_OPTS "ubuntu@$h" "cd $CLIENT_DIR && ./$GEN_BIN \
         --fix_gateway_addr=$gw --fix_sender_comp_id=S${hi}_${g} --client_id=$cid \
         --rate $PER_GEN --mode open --pace spin --burst 1 \
         --warmup $WU --measure $ME --drain_timeout 10 \
@@ -112,7 +118,7 @@ for R in "$@"; do
     continue
   fi
   # Percentiles cannot be averaged: merge the raw buckets.
-  M=$(python3 "$HERE/../sweep/merge-hdr.py" "${RAWS[@]}" | grep -E '^merged_')
+  M=$(python3 "$HERE/merge-hdr.py" "${RAWS[@]}" | grep -E '^merged_')
   p50=$(echo "$M" | grep merged_p50_us | cut -d= -f2)
   p90=$(echo "$M" | grep merged_p90_us | cut -d= -f2)
   p99=$(echo "$M" | grep merged_p99_us | cut -d= -f2)

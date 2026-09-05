@@ -382,7 +382,7 @@ sweep-gen:
 	CLIENTS="$(CLIENTS)" GATEWAYS="$(GATEWAY_ENDPOINTS)" \
 		SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
 		EXTRA="--symbol=$(SYMBOL) --price_levels=$(PRICE_LEVELS) --flow=$(FLOW) --max_inflight=$(MAX_INFLIGHT)" \
-		./sweep-gen.sh exchange-fix "$(SWEEP_GEN_CSV)" $(GENERATORS_PER_CLIENT) \
+		GEN_BIN=$(LOADGEN_BIN) ../sweep/sweep-gen.sh exchange-fix "$(SWEEP_GEN_CSV)" $(GENERATORS_PER_CLIENT) \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) $(SWEEP_FIX_RATES)
 
 CHART_DIR ?= ..

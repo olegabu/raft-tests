@@ -465,6 +465,28 @@ sweep-quickfix:
 		../sweep/sweep-multi.sh sequencer-quickfix . "$(abspath $(SWEEP_QUICKFIX_CSV))" \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_FIX_RATES)
 
+## The counter through the SAME rig the exchange sweep uses: several
+## generators per client box, split across several gateways. Every other
+## counter arm in this file runs ONE generator per box against ONE
+## gateway, so this is deliberately a separate product name and a
+## separate chart -- it is a DEPLOYMENT variant, not a comparable arm,
+## and putting it on the combined chart would invite exactly the
+## comparison it is not.
+##
+## Safe with several gateways without any code change, unlike the
+## exchange: the counter addresses replies by TOPIC, broadcasting on
+## totals-<clientId> where clientId is carried in the delta's high bits
+## (counter_client_id.hpp), so it never routes on a session id and two
+## gateways handing out the same connection ids cannot collide.
+SWEEP_GEN_CSV ?= counter-fix-gen.csv
+GENERATORS_PER_CLIENT ?= 4
+sweep-gen:
+	CLIENTS="$(CLIENTS)" GATEWAYS="$(FIX_ENDPOINTS)" \
+		SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
+		GEN_BIN=$(APP)_load_generator \
+		../sweep/sweep-gen.sh sequencer-fix-gen "$(SWEEP_GEN_CSV)" $(GENERATORS_PER_CLIENT) \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) $(SWEEP_FIX_RATES)
+
 start-fix-on:
 	ssh $(SSH_OPTS) $(SSH_USER)@$(FIX_HOST) \
 		"cd $(NODE_DIR) && for i in \$$(seq 0 \$$(( $(FIX_GATEWAYS) - 1 ))); do \

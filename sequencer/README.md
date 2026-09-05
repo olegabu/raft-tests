@@ -642,3 +642,173 @@ The Makefile now raises the soft limit to 65536 at every launch site
 (the hard limit was already ~1M, so it needs no privilege). The sweep
 that produced the current CSV ended at 1569 segments -- past the old
 1024 ceiling, so the fix is load-bearing, not precautionary.
+
+## A deployment variant: 20 sessions across 2 gateways
+
+Every FIX arm above runs **one** load generator per client box against
+**one** gateway — five sessions in total. The exchange work next door
+found that shape was measuring the rig rather than the system, and that
+splitting the load across more sessions and more gateways moved the
+numbers materially. This section asks the same question of the counter,
+changing **nothing but the deployment**: same binaries, same node
+flags, same journal geometry, same fleet.
+
+It is deliberately a **separate product name and a separate chart**
+(`sequencer-fix-gen`, `counter-fix-gen.csv`,
+`knee-sequencer-fix-gen.svg`). It does not belong on the combined chart
+beside the aeron/openraft/brpc arms, all of which are single-gateway:
+putting it there would invite exactly the comparison it is not.
+
+### The configuration, in full
+
+| role | count | type | placement |
+|---|---|---|---|
+| raft node | 3 | `c7a.4xlarge` | one per AZ: `us-east-1a`, `us-east-1b`, `us-east-1c` |
+| client | 5 | `c7a.2xlarge` | all in `us-east-1a`, same cluster placement group as node-0 |
+
+gp3 root volume, 100 GB, baseline 3,000 IOPS / 125 MB/s.
+
+- `counter_node` × 3, one per node box. Leader is node-0
+  (`172.31.0.147`), which is also the FIX host.
+- `counter_fix_gateway` × 2, **both on the leader**, ports 8700 and
+  8701. On the leader because the clients share its AZ, so no session
+  traffic crosses an AZ boundary.
+- `counter_load_generator` × 4 on each of the 5 client boxes = **20
+  generators, 20 FIX sessions**, round-robin across the two gateways —
+  **10 sessions per gateway**.
+
+Two gateways need no code change here, unlike the exchange. The counter
+addresses replies by **topic**, broadcasting on `totals-<clientId>`
+where `clientId` travels in the delta's high bits
+(`counter_client_id.hpp`), so it never routes on a session id and two
+gateways handing out the same connection ids cannot collide. The
+exchange does route on session id, and needed a `--gateway_id` to
+namespace them.
+
+`counter_node`, each of three:
+
+```
+--group=sequencer
+--peer=<own_priv>:8300:0
+--peers=172.31.0.147:8300:0,172.31.88.176:8300:0,172.31.24.139:8300:0
+--election_timeout_ms=1000
+--data_dir=/data/counter/data
+--raft_sync=false
+--event_dispatcher_num=1
+--bthread_concurrency=18
+--raft_max_parallel_append_entries_rpc_num=8
+--raft_enable_append_entries_cache=true
+--raft_max_append_entries_cache_size=8
+--raft_leader_batch=256
+--raft_apply_batch=32
+--raft_fsm_caller_commit_batch=512
+--raft_max_segment_size=8388608
+--raft_trace_append_entry_latency=false
+--raft_append_entry_high_lat_us=1000000
+--logtostderr --logbufsecs=0
+```
+
+Note what is **absent**: no `--journal_records_per_segment`, so this
+runs the journal's default 1,048,576 records per segment — the same as
+every earlier counter arm. That is deliberate. It keeps this comparison
+about the deployment and nothing else. It also means these numbers are
+**not** comparable with the exchange's on p99, because the exchange run
+sets that flag (see `exchange/docs/measurements.md` §3).
+
+`counter_fix_gateway` (i = 0, 1), under `ulimit -n 65536`:
+
+```
+--node_peers=172.31.0.147:8300
+--listen_port=<8700+i>
+--data_dir=/data/counter/data
+--resume_file=/data/counter/fix_resume_<i>
+--sequence_store_dir=/data/counter/fix_seq_<i>
+--logtostderr --logbufsecs=0
+```
+
+`counter_load_generator`, 20 of them (client_id 1..20):
+
+```
+--fix_gateway_addr=172.31.0.147:<8700 or 8701>   # round-robin by generator index
+--fix_sender_comp_id=S<box>_<g>
+--client_id=<1..20>
+--rate <offered/20>
+--mode open --pace spin --burst 1
+--warmup 5 --measure 45 --drain_timeout 10
+--hdr_raw_out /tmp/gen_<g>.csv --logtostderr
+```
+
+Reproduce with:
+
+```
+make start && make start-fix FIX_GATEWAYS=2
+make sweep-gen FIX_GATEWAYS=2 GENERATORS_PER_CLIENT=4 \
+  SWEEP_WARMUP=5 SWEEP_MEASURE=45 \
+  SWEEP_FIX_RATES="10000 25000 50000 75000 100000 125000 150000 200000 250000 300000 400000 500000"
+```
+
+### Results
+
+| offered | achieved | p50 | p90 | p99 | p99.9 | max | rig drops |
+|---|---|---|---|---|---|---|---|
+| 10,000 | 10,000 | 682 µs | 778 µs | 871 µs | 1,016 µs | 3,516 µs | 0 |
+| 25,000 | 25,000 | 712 µs | 811 µs | 924 µs | 1,212 µs | 3,314 µs | 0 |
+| 50,000 | 49,989 | 787 µs | 910 µs | 1,070 µs | 1,950 µs | 4,632 µs | 0 |
+| 75,000 | 74,980 | 881 µs | 1,045 µs | 1,301 µs | 2,246 µs | 5,164 µs | 0 |
+| 100,000 | 99,980 | 980 µs | 1,207 µs | 1,638 µs | 2,902 µs | 6,220 µs | 0 |
+| 125,000 | 124,980 | 1,072 µs | 1,349 µs | 1,836 µs | 3,408 µs | 9,896 µs | 0 |
+| 150,000 | 149,979 | 1,169 µs | 1,509 µs | 2,142 µs | 4,444 µs | 10,808 µs | 0 |
+| 200,000 | 199,960 | 1,327 µs | 1,799 µs | 3,042 µs | 5,828 µs | 12,720 µs | 0 |
+| 250,000 | 249,960 | 1,616 µs | 2,410 µs | 8,848 µs | 14,672 µs | 22,288 µs | 0 |
+| **300,000** | **299,941** | **1,996 µs** | 3,238 µs | 17,536 µs | 30,128 µs | 36,832 µs | **0** |
+| 400,000 | 366,342 | 107,648 µs | 115,072 µs | 140,544 µs | 148,480 µs | 152,064 µs | 1,617,379 |
+| 500,000 | 366,790 | 135,808 µs | 144,384 µs | 169,472 µs | 180,096 µs | 183,168 µs | 6,589,145 |
+
+### Is it an improvement? At matched rates, yes — and it also stops earlier
+
+Against `sequencer-fix` (5 sessions, one gateway), same fleet, same
+node flags, same geometry:
+
+| offered | p50 1gw → 20×2 | p99 1gw → 20×2 | p99.9 1gw → 20×2 |
+|---|---|---|---|
+| 10,000 | 801 → **682** | 974 → **871** | 1,062 → **1,016** |
+| 25,000 | 855 → **712** | 1,047 → **924** | 1,267 → **1,212** |
+| 50,000 | 946 → **787** | 1,259 → **1,070** | 42,752 → **1,950** |
+| 75,000 | 1,004 → **881** | 1,355 → **1,301** | 3,044 → **2,246** |
+| 100,000 | 1,055 → **980** | 1,499 → 1,638 | 13,232 → **2,902** |
+| 125,000 | 1,124 → **1,072** | 1,717 → 1,836 | 3,370 → 3,408 |
+| 150,000 | 1,181 → **1,169** | 2,378 → **2,142** | 22,352 → **4,444** |
+| 200,000 | 1,435 → **1,327** | 3,528 → **3,042** | 8,064 → **5,828** |
+| 250,000 | 1,851 → **1,616** | 8,256 → 8,848 | 13,568 → 14,672 |
+| 300,000 | 2,294 → **1,996** | 28,336 → **17,536** | 62,112 → **30,128** |
+
+**p50 is better at every single rate**, by 7-17%. **p99.9 is where the
+gain is large and consistent**: the single-gateway arm throws
+40-60 ms outliers at 50k, 100k, 150k and 300k that the 20×2 arm simply
+does not have — 42,752 → 1,950 µs at 50k is the extreme case. p99 alone
+is mixed (better at seven rates, worse at three), so the honest summary
+is *median and far tail improve; the p99 point estimate is a wash*.
+
+That the far tail improves while the geometry is unchanged is worth
+noting: the single-gateway arm's sporadic 13-42 ms p99.9 values look
+like segment-rollover stalls, and spreading delivery over two gateways
+and twenty sessions appears to absorb them rather than remove them. The
+exchange's fix removes them at the source.
+
+**But this shape reaches a lower ceiling, and the reason is the rig.**
+The single-gateway arm delivers **399,713/s with zero drops** at a
+6.7 ms p50. The 20×2 arm cannot even offer 400k: it achieves 366,342
+with **1.6 million rig drops**, meaning the generators failed to issue
+their schedule. Per-box offered load is identical in the two arms
+(80,000/s each), so what differs is four generator processes per box
+instead of one — and with `--pace spin` each one spins a core, on a
+c7a.2xlarge that has eight. Plausible, and consistent with the drops
+being rig-side, but **not measured**: confirming it means watching
+client CPU during a 400k run, or re-running the 20×2 arm with
+`--pace sleep` or fewer, faster generators.
+
+So the deployment conclusion is bounded: **through 300k, more sessions
+across two gateways is a real improvement in median and far-tail
+latency at no cost. Above 300k this rig cannot pose the question**, and
+the best measured counter throughput on this fleet remains the
+single-gateway arm's 400k.

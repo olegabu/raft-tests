@@ -341,18 +341,28 @@ CFG={
  # y bound derived from the data (max p99 3,747,840us), not guessed:
  # this axis has now been set too low twice, silently clipping points
  # off the top of the canvas both times (spec.md §10.9).
- # Rescaled 2026-09-05 after the journal segment-rollover fix. The old
- # axis reached 4,000,000 us because the tail was rollover stalls; with
- # --journal_records_per_segment=262144 nothing exceeds 7.4 ms, so an
- # axis sized for the old data squashes every point into the bottom
- # tenth of the canvas. No ceiling marker: this ladder stops at 100k
- # and met every rate, so the ceiling is off-chart and untested on the
- # fixed geometry.
- "exchange-fix": (110000,25000,(700,2400),
-                     [700,900,1100,1300,1600,2000,2400], 100000,
-                     [],
+ # Full ladder to 500k on the fixed journal geometry
+ # (--journal_records_per_segment=262144), 2026-09-05. Axis spans the
+ # whole sweep including the collapse, as every other product's chart
+ # does, so the arms stay comparable. Two markers, not one: the last
+ # clean rate and the ceiling are different numbers and conflating them
+ # is a mistake this chart made before.
+ "exchange-fix": (520000,100000,(700,5000000),
+                     [1000,3000,10000,40000,150000,600000,4000000], 150000,
+                     [(150000,"last clean",150),(195000,"ceiling",40)],
                      "exchange-fix - a CLOB on sequencer, over FIX 4.4",
-                     "Full rate to 100k, zero drops, p50 1.1ms and p99 2.1ms at 100k. Hollow = offered rate not met."),
+                     "Full rate to 150k with zero drops, p50 1.4ms / p99 4.5ms. Hollow = offered rate not met."),
+ # The counter in the exchange's rig shape: 20 sessions over 2
+ # gateways. Its own product name and its own chart on purpose -- every
+ # other arm here is single-gateway, so this does not belong on the
+ # combined chart. Comfort zone to 300k: that is the last rate this
+ # deployment offers in full, and above it the CLIENTS fail to issue
+ # (1.6M rig drops at 400k), so the rows past 300k measure the rig.
+ "sequencer-fix-gen": (520000,100000,(600,200000),
+                     [700,1000,2000,5000,15000,50000,150000], 300000,
+                     [(300000,"last clean",150)],
+                     "sequencer-fix-gen - the counter, 20 sessions across 2 gateways",
+                     "A deployment variant, not a comparable arm. Full rate to 300k; past it the rig drops."),
  "sequencer-fix": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 25000,
                      [(450000,"knee",16)],

@@ -1,0 +1,13 @@
+product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet
+sequencer-fix-gen,10000,10000,682,778,871,1016,3516,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,25000,25000,712,811,924,1212,3314,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,50000,49989,787,910,1070,1950,4632,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,75000,74980,881,1045,1301,2246,5164,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,100000,99980,980,1207,1638,2902,6220,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,125000,124980,1072,1349,1836,3408,9896,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,150000,149979,1169,1509,2142,4444,10808,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,200000,199960,1327,1799,3042,5828,12720,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,250000,249960,1616,2410,8848,14672,22288,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,300000,299941,1996,3238,17536,30128,36832,0,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,400000,366342,107648,115072,140544,148480,152064,1617379,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix-gen,500000,366790,135808,144384,169472,180096,183168,6589145,0,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
