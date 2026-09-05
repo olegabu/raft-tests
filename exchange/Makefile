@@ -122,6 +122,25 @@ GATEWAY_ID_BASE ?= 0
 # acknowledgement. It is what distinguishes "the exchange is the
 # bottleneck" from "the exchange is waiting on braft".
 #   make start APPLY_STALL_US=1000
+## Journal geometry. Segment rollover is a periodic, GLOBAL stall: at
+## 50k with the default 1,048,576 records a segment fills every ~21s,
+## and every client sees a 100-240ms spike at exactly that period. Lower
+## this to make rollovers more frequent (which is how the correlation
+## was established), raise it to make them rarer.
+##
+## Records per segment and max record bytes bound the segment's SIZE
+## together; raising one without lowering the other makes segments
+## proportionally bigger.
+##
+## Default to a quarter of the journal's own default. The index work is
+## identical either way -- 16 bytes per record, whatever the segment
+## size -- so this does not trade throughput for latency. It only
+## decides whether that work lands as one 16 MiB burst every 21 s at
+## 50k, or as four 4 MiB ones. The burst is what shows up as a 320 ms
+## p99; spread out it is invisible (p99 5.3 ms). measurements.md §3.
+JOURNAL_RECORDS_PER_SEGMENT ?= 262144
+JOURNAL_GEOMETRY_FLAGS = $(if $(JOURNAL_RECORDS_PER_SEGMENT),--journal_records_per_segment=$(JOURNAL_RECORDS_PER_SEGMENT),)
+
 APPLY_STALL_US ?=
 NODE_ENV = $(if $(APPLY_STALL_US),SEQ_APPLY_STALL_US=$(APPLY_STALL_US),)
 
@@ -205,6 +224,7 @@ define start_node
 			--raft_leader_batch=$(LEADER_BATCH) --raft_apply_batch=$(APPLY_BATCH) \
 			--raft_fsm_caller_commit_batch=$(FSM_COMMIT_BATCH) \
 			--raft_max_segment_size=$(SEGMENT_SIZE) \
+			$(JOURNAL_GEOMETRY_FLAGS) \
 			--logtostderr --logbufsecs=0 \
 			> $(NODE_DIR)/std.log 2>&1 < /dev/null & echo \$$! > $(NODE_BIN).pid"
 endef
@@ -381,3 +401,11 @@ leader:
 	@for h in $(NODES); do \
 		echo "-- $$h"; ssh $(SSH_OPTS) $(SSH_USER)@$$h "curl -s 127.0.0.1:$(PORT)/raft_stat | head -12"; \
 	done
+
+## Fleet lifecycle lives in ../Makefile, but the $79/day rule is easiest
+## to honour from wherever you happen to be. A `make stop-instances`
+## here once failed with "No rule to make target" inside an EXIT trap,
+## which stopped the processes and left all eight instances billing.
+.PHONY: stop-instances start-instances instance-status
+stop-instances start-instances instance-status:
+	@$(MAKE) -C .. $@

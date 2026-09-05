@@ -341,11 +341,18 @@ CFG={
  # y bound derived from the data (max p99 3,747,840us), not guessed:
  # this axis has now been set too low twice, silently clipping points
  # off the top of the canvas both times (spec.md §10.9).
- "exchange-fix": (520000,100000,(700,4000000),
-                     [1000,3000,10000,40000,150000,600000,4000000], 100000,
-                     [(123000,"ceiling",150)],
+ # Rescaled 2026-09-05 after the journal segment-rollover fix. The old
+ # axis reached 4,000,000 us because the tail was rollover stalls; with
+ # --journal_records_per_segment=262144 nothing exceeds 7.4 ms, so an
+ # axis sized for the old data squashes every point into the bottom
+ # tenth of the canvas. No ceiling marker: this ladder stops at 100k
+ # and met every rate, so the ceiling is off-chart and untested on the
+ # fixed geometry.
+ "exchange-fix": (110000,25000,(700,2400),
+                     [700,900,1100,1300,1600,2000,2400], 100000,
+                     [],
                      "exchange-fix - a CLOB on sequencer, over FIX 4.4",
-                     "Zero drops through 150k, p50 ~1ms to 100k, ceiling ~123k. Hollow = offered rate not met."),
+                     "Full rate to 100k, zero drops, p50 1.1ms and p99 2.1ms at 100k. Hollow = offered rate not met."),
  "sequencer-fix": (520000,100000,(500,200000),
                      [500,1000,2000,5000,10000,50000,200000], 25000,
                      [(450000,"knee",16)],

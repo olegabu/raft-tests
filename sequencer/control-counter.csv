@@ -1,0 +1,3 @@
+product,rate,achieved,p50,p90,p99,p999,max,dropped,lag,fleet
+sequencer-fix,100000,99955,1005,1182,1492,2890,4772,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
+sequencer-fix,400000,399899,4544,28384,42208,49152,51360,0,1,nodes-3x-c7a.4xlarge-multiaz/clients-5x-c7a.2xlarge
