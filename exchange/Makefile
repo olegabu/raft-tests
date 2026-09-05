@@ -350,6 +350,21 @@ sweep-fix: clear-raw
 		../sweep/sweep-multi.sh exchange-fix . "$(abspath $(SWEEP_FIX_CSV))" \
 		$(SWEEP_WARMUP) $(SWEEP_MEASURE) "" $(SWEEP_FIX_RATES)
 
+## The multi-generator sweep: GENERATORS_PER_CLIENT processes on each
+## client box, spread round-robin over GATEWAYS. One generator per box
+## caps the measurement near 125k -- the rig, not the exchange -- so the
+## default is four.
+GENERATORS_PER_CLIENT ?= 4
+SWEEP_GEN_CSV ?= exchange-gen.csv
+GATEWAY_ENDPOINTS = $(foreach i,$(shell seq 0 $$(( $(FIX_GATEWAYS) - 1 ))),$(NODE1_PRIV):$(shell echo $$(( $(FIX_PORT) + $(i) ))))
+
+sweep-gen:
+	CLIENTS="$(CLIENTS)" GATEWAYS="$(GATEWAY_ENDPOINTS)" \
+		SSH_KEY=$(SSH_KEY) CLIENT_DIR=$(CLIENT_DIR) FLEET="$(FLEET)" \
+		EXTRA="--symbol=$(SYMBOL) --price_levels=$(PRICE_LEVELS) --flow=$(FLOW) --max_inflight=$(MAX_INFLIGHT)" \
+		./sweep-gen.sh exchange-fix "$(SWEEP_GEN_CSV)" $(GENERATORS_PER_CLIENT) \
+		$(SWEEP_WARMUP) $(SWEEP_MEASURE) $(SWEEP_FIX_RATES)
+
 CHART_DIR ?= ..
 chart:
 	python3 ../sweep/mkcharts.py $(SWEEP_FIX_CSV) $(CHART_DIR)
